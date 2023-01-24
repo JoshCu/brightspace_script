@@ -1,8 +1,3 @@
-from os import listdir, makedirs, rename, remove, chdir, getcwd
-from os import path as p
-from shutil import move
-import zipfile
-
 import os
 import sys
 import subprocess
@@ -71,7 +66,6 @@ def to_csv(results):
     # convert results to a grid on a webpage
     # if success then make the cell green
     # if failure then make the cell red
-    # add border to the table
     with open("results.html", "w") as f:
         f.write("<table style=\"border: 1px solid black;\">\n")
         for result in results:
@@ -88,7 +82,7 @@ def to_csv(results):
                 f.write(f"{key} : {result[key]}\n")
 
 
-def compile_all():
+if __name__ == "__main__":
     results = []
     # get all the directories in the current directory
     all_paths = os.listdir(os.getcwd())
@@ -128,43 +122,3 @@ def compile_all():
     to_csv(results)
 
     # write errors to a file
-
-
-if __name__ == "__main__":
-
-    start_dir = getcwd()
-
-    all_paths = listdir('.')
-
-    for path in all_paths:
-        print(path)
-        if path[-4:] == ".zip":
-            if path[0] == 'A':
-                name = path.split(' ')[0]
-            else:
-                words = path.split(' ')
-                name = "{} {}".format(words[1], words[2])
-            with zipfile.ZipFile(path, 'r') as zip_ref:
-                zip_ref.extractall(f"{name}")
-            # if zips folder doesn't exist then make it
-            if not p.exists("zips"):
-                makedirs("zips")
-            move(path, f"zips/{path}")
-            chdir(name)
-            all_subpaths = listdir('.')
-            for spath in all_subpaths:
-                print(spath)
-                if spath[0].isnumeric():
-                    person_name = spath.split('-')[2].strip()
-                    person_name = person_name.split(' ')[1] + ', ' + person_name.split(' ')[0]
-                    print(person_name)
-                    if not p.exists(person_name):
-                        makedirs(person_name)
-                    if spath[-4:] == ".zip":
-                        with zipfile.ZipFile(spath, 'r') as zip_ref:
-                            zip_ref.extractall(f"{person_name}/{spath}")
-                        remove(spath)
-                    else:
-                        rename(spath, f"{person_name}/{spath}")
-            compile_all()
-            chdir(start_dir)

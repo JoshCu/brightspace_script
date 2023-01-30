@@ -129,18 +129,24 @@ def compile_all():
         if main_path is None:
             result[name] = "ERROR No .cpp file found"
             continue
-        else:
-            # compile the main.cpp and report errors
-            try:
-                if COMPILER_FLAGS == "":
-                    subprocess.run([COMPILER, main_path], check=True, capture_output=True)
-                else:
-                    subprocess.run([COMPILER, COMPILER_FLAGS, main_path], check=True, capture_output=True)
-                result[name] = "SUCCESS"
-                os.remove("a.exe")
-            except subprocess.CalledProcessError as e:
-                # get the error message
-                result[name] = f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"
+
+        # compile the main.cpp and report errors
+        if os.path.join(os.getcwd(), "bin") not in os.listdir(os.getcwd()):
+            os.mkdir("bin")
+
+        try:
+            binary_path = os.path.join(original_path, path, "bin", "out.exe")
+            if COMPILER_FLAGS == "":
+                subprocess.run([COMPILER, main_path, "-o", binary_path], check=True, capture_output=True)
+            else:
+                subprocess.run(
+                    [COMPILER, COMPILER_FLAGS, main_path, "-o", binary_path],
+                    check=True, capture_output=True)
+            result[name] = "SUCCESS"
+
+        except subprocess.CalledProcessError as e:
+            # get the error message
+            result[name] = f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"
 
         results.append(result)
 

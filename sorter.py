@@ -25,18 +25,21 @@ def extract_date(path):
 
     # manually day and pad the hour but not minutes
     # jfc what is this format brightspace
+    month = date_string.split()[0]
+    year = date_string.split()[2]
     day = date_string.split()[1][:-1]
     hour = date_string.split()[3][:-2]
     minute = date_string.split()[3][-len(hour):]
+    AmPm = date_string.split()[4]
 
     day = day.zfill(2)
     hour = hour.zfill(2)
+    minute = minute.zfill(2)
     # re add the day and hour
-    date_string = date_string.replace(date_string.split()[1], day)
-    date_string = date_string.replace(date_string.split()[3], f"{hour} {minute}")
+    new_date_string = f"{month} {day} {year} {hour} {minute} {AmPm}"
 
     # comma omitted as we don't re add it after it's removed
-    dt = datetime.datetime.strptime(date_string, "%b %d %Y %I %M %p")
+    dt = datetime.datetime.strptime(new_date_string, "%b %d %Y %I %M %p")
     return dt
 
 
@@ -149,7 +152,7 @@ if __name__ == "__main__":
             # if zips folder doesn't exist then make it
             if not p.exists("zips"):
                 makedirs("zips")
-            move(path, f"zips/{path}")
+            #move(path, f"zips/{path}")
             chdir(name)
             all_subpaths = listdir('.')
             for spath in all_subpaths:

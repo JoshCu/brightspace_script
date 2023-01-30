@@ -1,6 +1,6 @@
 from os import listdir, makedirs, rename, remove, chdir, getcwd
 from os import path as p
-from shutil import move
+import shutil
 import zipfile
 
 import os
@@ -65,6 +65,8 @@ def get_most_recent_path(student_paths):
     most_recent = None
     most_recent_date = None
     for path in student_paths:
+        if path in ["src", "bin"]:
+            continue
         date = extract_date(path)
         if most_recent_date is None or date > most_recent_date:
             most_recent = path
@@ -73,17 +75,54 @@ def get_most_recent_path(student_paths):
     return most_recent
 
 
-def find_main_cpp(path):
-    if os.path.isfile(path):
-        if path.endswith(".cpp"):
-            return os.path.join(os.getcwd(), path)
-        else:
-            return None
-    elif os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if file.endswith(".cpp"):
-                    return (os.path.join(root, file))
+def get_most_recent_file(filename, student_path):
+    # get the most recent path
+    pass
+    most_recent = None
+    most_recent_date = None
+
+    student_files = os.listdir(student_path)
+
+    for path in student_files:
+        if path in ["src", "bin"]:
+            continue
+        if filename in path:
+            date = extract_date(path)
+            if most_recent_date is None or date > most_recent_date:
+                most_recent = path
+                most_recent_date = date
+
+    return most_recent
+
+
+# def find_main_cpp(path):
+#     if os.path.isfile(path):
+#         if path.endswith(".cpp"):
+#             return os.path.join(os.getcwd(), path)
+#         else:
+#             return None
+#     elif os.path.isdir(path):
+#         for root, dirs, files in os.walk(path):
+#             for file in files:
+#                 if file.endswith(".cpp"):
+#                     return (os.path.join(root, file))
+
+def rename_files(student_path):
+    # get the names of all the files in the path
+    # get the most recent version, and copy it to src
+    file_names = []
+    for file in os.listdir(student_path):
+        # assuming the file names don't have spaces in them
+        name = file.split(' ')[-1]
+        file_names.append(name)
+
+    #  remove duplicates
+    file_names = list(set(file_names))
+
+    for file in file_names:
+        most_recent = get_most_recent_file(file, student_path)
+        if most_recent is not None:
+            shutil.copy(most_recent, os.path.join(student_path, "src", file))
 
 
 def to_csv(results):
@@ -121,26 +160,40 @@ def compile_all():
         name = path
         os.chdir(original_path)
         os.chdir(path)
-        # find the most recent main.cpp
-        most_recent = get_most_recent_path(os.listdir(os.getcwd()))
-        main_path = find_main_cpp(most_recent)
 
-        result = {}
-        if main_path is None:
-            result[name] = "ERROR No .cpp file found"
-            continue
+        # create a src directory if it doesn't exist
+        if "src" not in os.listdir(os.getcwd()):
+            os.mkdir("src")
 
-        # compile the main.cpp and report errors
-        if os.path.join(os.getcwd(), "bin") not in os.listdir(os.getcwd()):
+        # create a bin directory if it doesn't exist
+        if "bin" not in os.listdir(os.getcwd()):
             os.mkdir("bin")
 
+        # find the most recent main.cpp
+        most_recent = get_most_recent_path(os.listdir(os.getcwd()))
+
+        if os.path.isdir(most_recent):
+            # copy all files into src
+            for root, dirs, files in os.walk(most_recent):
+                for file in files:
+                    shutil.copy(os.path.join(root, file), os.path.join(os.getcwd(), "src", file))
+        else:
+            # we need to copy the files and rename them so imports work
+            rename_files(os.getcwd())
+
+        result = {}
+        src_path = os.path.join(os.getcwd(), "src")
+
+        os.chdir(src_path)
+
+        # compile the main.cpp and report errors
         try:
             binary_path = os.path.join(original_path, path, "bin", "out.exe")
             if COMPILER_FLAGS == "":
-                subprocess.run([COMPILER, main_path, "-o", binary_path], check=True, capture_output=True)
+                subprocess.run([COMPILER, "*.cpp", "-o", binary_path], check=True, capture_output=True)
             else:
                 subprocess.run(
-                    [COMPILER, COMPILER_FLAGS, main_path, "-o", binary_path],
+                    [COMPILER, COMPILER_FLAGS, "*.cpp", "-o", binary_path],
                     check=True, capture_output=True)
             result[name] = "SUCCESS"
 
@@ -175,7 +228,7 @@ if __name__ == "__main__":
             # if zips folder doesn't exist then make it
             if not p.exists("zips"):
                 makedirs("zips")
-            #move(path, f"zips/{path}")
+            shutil.move(path, f"zips/{path}")
             chdir(name)
             all_subpaths = listdir('.')
             for spath in all_subpaths:

@@ -16,21 +16,38 @@ COMPILER_FLAGS = ""
 HIDE_SUCCESS = False
 
 
+def find_AM_PM(path):
+    # find the AM or PM in the path
+    # if it is not found then return None
+    # otherwise return the index of the AM or PM
+    if "AM" in path:
+        return path.index("AM")
+    elif "PM" in path:
+        return path.index("PM")
+    else:
+        return None
+
+
 def extract_date(path):
     # get the date from the path
     # convert it into a datetime object
     # return the datetime object
-    date_string = path.split('-')[3].strip()
+
+    # variation in names and formats means we have to do this manually
+    # find AM or PM and then work backwards
+    start_location = find_AM_PM(path.split(' ')) - 4
+
+    date_list = path.split(' ')[start_location:start_location+5]
     # formatted as Jan 1, 2023 1114 AM
 
     # manually day and pad the hour but not minutes
     # jfc what is this format brightspace
-    month = date_string.split()[0]
-    year = date_string.split()[2]
-    day = date_string.split()[1][:-1]
-    hour = date_string.split()[3][:-2]
-    minute = date_string.split()[3][-len(hour):]
-    AmPm = date_string.split()[4]
+    month = date_list[0]
+    year = date_list[2]
+    day = date_list[1][:-1]
+    hour = date_list[3][:-2]
+    minute = date_list[3][-len(hour):]
+    AmPm = date_list[4]
 
     day = day.zfill(2)
     hour = hour.zfill(2)

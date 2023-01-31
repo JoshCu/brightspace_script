@@ -11,7 +11,7 @@ import datetime
 # give either full path to compiler or just the name of the compiler
 # if just the name of the compiler, it will assume it is in the path
 COMPILER = "g++"
-COMPILER_FLAGS = ""
+COMPILER_FLAGS = ["-std=c++17"]
 # only reports failures
 HIDE_SUCCESS = False
 
@@ -213,7 +213,7 @@ def compile_all():
                 subprocess.run([COMPILER, "*.cpp", "-o", binary_path], check=True, capture_output=True)
             else:
                 subprocess.run(
-                    [COMPILER, COMPILER_FLAGS, "*.cpp", "-o", binary_path],
+                    [COMPILER, *COMPILER_FLAGS, "*.cpp", "-o", binary_path],
                     check=True, capture_output=True)
             result.append(("Compilation", "SUCCESS"))
 
@@ -248,7 +248,7 @@ if __name__ == "__main__":
             # if zips folder doesn't exist then make it
             if not p.exists("zips"):
                 makedirs("zips")
-            shutil.move(path, f"zips/{path}")
+            #shutil.move(path, f"zips/{path}")
             chdir(name)
             all_subpaths = listdir('.')
             for spath in all_subpaths:

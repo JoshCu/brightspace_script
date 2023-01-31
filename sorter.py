@@ -173,14 +173,14 @@ def compile_all():
         os.chdir(path)
 
         # check to see if there is a mix of files and directories
-        file, directory = False, False
+        files_present, directories_present = False, False
         for file in os.listdir(os.getcwd()):
             if os.path.isfile(file):
-                file = True
+                files_present = True
             if os.path.isdir(file):
-                directory = True
+                directories_present = True
 
-        result.append(("Mixed Files", file and directory))
+        result.append(("Mixed Files", files_present and directories_present))
 
         # create a src directory if it doesn't exist
         if "src" not in os.listdir(os.getcwd()):

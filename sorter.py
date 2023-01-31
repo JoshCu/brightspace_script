@@ -1,3 +1,4 @@
+from ctypes import sizeof
 from os import listdir, makedirs, rename, remove, chdir, getcwd
 from os import path as p
 import shutil
@@ -11,7 +12,7 @@ import datetime
 # give either full path to compiler or just the name of the compiler
 # if just the name of the compiler, it will assume it is in the path
 COMPILER = "g++"
-COMPILER_FLAGS = ["-std=c++17"]
+COMPILER_FLAGS = []
 # only reports failures
 HIDE_SUCCESS = False
 
@@ -132,7 +133,7 @@ def to_csv(results):
     # if failure then make the cell red
     # add border to the table
     with open("results.csv", "w") as f:
-        for student in results:
+        for student in sorted(results.keys()):
             f.write(str(student) + ",")
             for result in results[student]:
                 f.write(str(result[1]) + ",")
@@ -140,7 +141,7 @@ def to_csv(results):
 
     with open("results.html", "w") as f:
         f.write("<table border=\"1\">")
-        for student in results:
+        for student in sorted(results.keys()):
             f.write("<tr>")
             f.write("<td>" + student + "</td>")
             for result in results[student]:
@@ -208,17 +209,27 @@ def compile_all():
 
         # compile the main.cpp and report errors
         try:
+            print("Current WD:")
+            print(os.getcwd())
+            src_path = os.path.join(original_path, path, "src", "*.cpp")
             binary_path = os.path.join(original_path, path, "bin", "out.exe")
-            if COMPILER_FLAGS == "":
-                subprocess.run([COMPILER, "*.cpp", "-o", binary_path], check=True, capture_output=True)
+            if len(COMPILER_FLAGS) == 0:
+                p = subprocess.Popen(f'{COMPILER} *.cpp' + " -o " + f'"{binary_path}"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                out, err = p.communicate()
+                if(len(err) > 0):
+                    result.append(("Compilation", "Compilation failed: " + str(err)))
+                else:
+                    result.append(("Compilation", "SUCCESS"))
+                #subprocess.run([COMPILER, os.path.join(original_path, path, "src", "*.cpp"), "-o", binary_path], check=True, capture_output=True, shell=True)
             else:
                 subprocess.run(
-                    [COMPILER, *COMPILER_FLAGS, "*.cpp", "-o", binary_path],
-                    check=True, capture_output=True)
-            result.append(("Compilation", "SUCCESS"))
+                        [COMPILER, *COMPILER_FLAGS, os.path.join(original_path, path, "src", "*.cpp"), "-o", binary_path],
+                   check=True, capture_output=True, shell=True)
+            #result.append(("Compilation", "SUCCESS"))
 
         except subprocess.CalledProcessError as e:
             # get the error message
+            print(e.cmd)
             result.append(("Compilation", f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"))
 
         results[name] = result

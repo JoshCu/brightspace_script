@@ -131,24 +131,35 @@ def to_csv(results):
     # if success then make the cell green
     # if failure then make the cell red
     # add border to the table
-    with open("results.html", "w") as f:
-        f.write("<table style=\"border: 1px solid black;\">\n")
-        for result in results:
-            for key in result:
-                if result[key] == "SUCCESS":
-                    f.write(f"<tr><td>{key}</td><td style=\"background-color: green;\">{result[key]}</td></tr>\n")
-                else:
-                    f.write(f"<tr><td>{key}</td><td style=\"background-color: red;\">{result[key]}</td></tr>\n")
-        f.write("</table>\n")
-
     with open("results.csv", "w") as f:
-        for result in results:
-            for key in result:
-                f.write(f"{key} : {result[key]}\n")
+        for student in results:
+            f.write(str(student) + ",")
+            for result in results[student]:
+                f.write(str(result[1]) + ",")
+            f.write("\n")
+
+    with open("results.html", "w") as f:
+        f.write("<table border=\"1\">")
+        for student in results:
+            f.write("<tr>")
+            f.write("<td>" + student + "</td>")
+            for result in results[student]:
+                if str(result[0]) == "Compilation":
+                    if str(result[1]) == "SUCCESS":
+                        f.write("<td bgcolor=\"green\">" + str(result[1]) + "</td>")
+                    else:
+                        f.write("<td bgcolor=\"red\">" + str(result[1]) + "</td>")
+                elif str(result[0]) == "Mixed Files":
+                    if str(result[1]) == "True":
+                        f.write("<td bgcolor=\"blue\">" + str(result[1]) + "</td>")
+                    else:
+                        f.write("<td bgcolor=\"white\">" + str(result[1]) + "</td>")
+            f.write("</tr>")
+        f.write("</table>")
 
 
 def compile_all():
-    results = []
+    results = {}
     # get all the directories in the current directory
     all_paths = os.listdir(os.getcwd())
     original_path = os.getcwd()
@@ -156,10 +167,20 @@ def compile_all():
     for path in all_paths:
         if os.path.isfile(os.path.join(original_path, path)):
             continue
-
+        result = []
         name = path
         os.chdir(original_path)
         os.chdir(path)
+
+        # check to see if there is a mix of files and directories
+        file, directory = False, False
+        for file in os.listdir(os.getcwd()):
+            if os.path.isfile(file):
+                file = True
+            if os.path.isdir(file):
+                directory = True
+
+        result.append(("Mixed Files", file and directory))
 
         # create a src directory if it doesn't exist
         if "src" not in os.listdir(os.getcwd()):
@@ -181,7 +202,6 @@ def compile_all():
             # we need to copy the files and rename them so imports work
             rename_files(os.getcwd())
 
-        result = {}
         src_path = os.path.join(os.getcwd(), "src")
 
         os.chdir(src_path)
@@ -195,13 +215,13 @@ def compile_all():
                 subprocess.run(
                     [COMPILER, COMPILER_FLAGS, "*.cpp", "-o", binary_path],
                     check=True, capture_output=True)
-            result[name] = "SUCCESS"
+            result.append(("Compilation", "SUCCESS"))
 
         except subprocess.CalledProcessError as e:
             # get the error message
-            result[name] = f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"
+            result.append(("Compilation", f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"))
 
-        results.append(result)
+        results[name] = result
 
     os.chdir(original_path)
     to_csv(results)

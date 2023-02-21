@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # timeout in seconds for each test
-TIMEOUT = 4*60
+TIMEOUT = 15
 
 # give either full path to compiler or just the name of the compiler
 # if just the name of the compiler, it will assume it is in the path
@@ -28,7 +28,8 @@ HIDE_SUCCESS = False
 class exit_code(Enum):
     SUCCESS = 0
     ERROR = 1
-    NOT_ATTEMPTED = 2
+    COMPILATION_ERROR = 2
+    NOT_ATTEMPTED = -1
 
 
 @dataclass
@@ -75,7 +76,9 @@ class part2:
 # funtion to print a progress bar to the console
 
 
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
+def print_progress_bar(
+        iteration, total, prefix='', suffix='', decimals=1, length=os.get_terminal_size()[0], fill='█',
+        printEnd="\r"):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -88,6 +91,7 @@ def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, lengt
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r)
     """
+    length -= len(prefix) + len(suffix) + 10
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
@@ -179,7 +183,7 @@ def to_html(results, filename="results.html"):
                 if isinstance(value, test_result):
                     if value.exit_code == exit_code.SUCCESS.value:
                         f.write(f'<td style="background-color:lightgreen">{value.result}</td>')
-                    elif value.exit_code == exit_code.ERROR.value:
+                    elif value.exit_code == exit_code.ERROR.value or value.exit_code == exit_code.COMPILATION_ERROR.value:
                         f.write(f'<td style="background-color:lightcoral">{value.result}</td>')
                     elif value.exit_code == exit_code.NOT_ATTEMPTED.value:
                         f.write(f'<td style="background-color:lightyellow">{value.result}</td>')
@@ -280,13 +284,13 @@ async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple
     # record the error and return that if there is an error
     try:
         output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
-        stdout, stderr = await output.communicate()
+        stdout, stderr = await asyncio.wait_for(output.communicate(), timeout=TIMEOUT)
         return stdout.decode('utf-8'), output.returncode
     except subprocess.CalledProcessError as e:
         # get the error message
         return f"Exception err={e.stderr.decode('utf-8')}\n out={e.stdout.decode('utf-8')}", e.returncode
-    except subprocess.TimeoutExpired as e:
-        return f"Timeout expired ({TIMEOUT}s)", 1
+    except asyncio.TimeoutError:
+        return f"Timeout after {TIMEOUT} seconds", exit_code.ERROR.value
 
 
 async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int():
@@ -299,11 +303,11 @@ async def async_broker(function: callable(str)) -> list():
     counter = 0
     student_dirs = [student for student in listdir('.') if p.isdir(student)]
     student_tasks = [function(student) for student in student_dirs]
-    print_progress_bar(0, len(student_dirs))
+    print_progress_bar(0, len(student_dirs), prefix='Progress:', suffix='Complete')
     while student_tasks:
         finished, unfinished = await asyncio.wait(student_tasks, return_when=asyncio.FIRST_COMPLETED)
         counter += len(finished)
-        print_progress_bar(counter, len(student_dirs))
+        print_progress_bar(counter, len(student_dirs), prefix='Progress:', suffix='Complete')
         student_tasks = unfinished
         for task in finished:
             results.append(task.result())
@@ -347,6 +351,7 @@ async def grade_part_1(student: str) -> part1:
         return student_results
 
     # run .\rsa435.exe
+
     binary_path = os.path.join(part1_path, 'rsa435.exe')
     if await run_test(student_results.rsa_file_runs, [binary_path], part1_path) != 0:
         return student_results

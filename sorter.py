@@ -3,10 +3,15 @@ from os import path as p
 import shutil
 import zipfile
 
+from dataclasses import dataclass
+from enum import Enum
 import os
 import sys
 import subprocess
 import datetime
+
+# timeout in seconds for each test
+TIMEOUT = 4*60
 
 # give either full path to compiler or just the name of the compiler
 # if just the name of the compiler, it will assume it is in the path
@@ -14,6 +19,78 @@ COMPILER = "g++"
 COMPILER_FLAGS = ["-std=c++17"]
 # only reports failures
 HIDE_SUCCESS = False
+
+
+class exit_code(Enum):
+    SUCCESS = 0
+    ERROR = 1
+    NOT_ATTEMPTED = 2
+
+
+@dataclass
+class test_result:
+    result: str = ""
+    exit_code: int = exit_code.NOT_ATTEMPTED.value
+
+
+@dataclass
+class part1:
+    student_name: str
+    rsa_file_found: test_result = None
+    rsa_file_compiles: test_result = None
+    rsa_file_runs: test_result = None
+    keys_file_found: test_result = None
+    grading_builds: test_result = None
+    grading_runs: test_result = None
+
+    # if you don't do this, the attributes of the class will be shared between all instances
+    def __post_init__(self):
+        for attr in self.__dict__.keys():
+            if self.__annotations__[attr] == test_result:
+                setattr(self, attr, test_result())
+
+
+@dataclass
+class part2:
+    student_name: str
+    message_file_found: test_result = None
+    message_file_compiles: test_result = None
+    oneline_txt_signed: test_result = None
+    twoline_txt_signed: test_result = None
+    bible_txt_signed: test_result = None
+    oneline_txt_verified: test_result = None
+    twoline_txt_verified: test_result = None
+    bible_txt_verified: test_result = None
+
+    # if you don't do this, the attributes of the class will be shared between all instances
+    def __post_init__(self):
+        for attr in self.__dict__.keys():
+            if self.__annotations__[attr] == test_result:
+                setattr(self, attr, test_result())
+
+# funtion to print a progress bar to the console
+
+
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+    # Print New Line on Complete
+    if iteration == total:
+        print()
 
 
 def find_AM_PM(path):
@@ -65,7 +142,9 @@ def get_most_recent_path(student_paths):
     most_recent = None
     most_recent_date = None
     for path in student_paths:
-        if path in ["src", "bin"]:
+        # all brightspace paths start with 12 digits
+        # if not then it's a path we've made and we can ignore it
+        if not path.split(' ')[0].isnumeric():
             continue
         date = extract_date(path)
         if most_recent_date is None or date > most_recent_date:
@@ -75,195 +154,310 @@ def get_most_recent_path(student_paths):
     return most_recent
 
 
-def get_most_recent_file(filename, student_path):
-    # get the most recent path
-    pass
-    most_recent = None
-    most_recent_date = None
+def to_html(results, filename="results.html"):
+    # create an html file with the results in a table format
+    # one row per student, use the variable names in the dataclass as the column headers
+    # use the result and exit_code variables in the test_result dataclass as the values
+    # use the exit_code enum to determine the color of the cell
+    # green for success, light red for error, yellow for not attempted
+    headers = results[0].__annotations__.keys()
+    with open(filename, 'w') as f:
+        f.write('<html><body><table>\n')
+        f.write('<tr>')
+        for header in headers:
+            f.write(f'<th>{header}</th>')
+        f.write('</tr>\n')
+        for result in results:
+            f.write('<tr>')
+            for header in headers:
+                value = getattr(result, header)
+                if isinstance(value, test_result):
+                    if value.exit_code == exit_code.SUCCESS.value:
+                        f.write(f'<td style="background-color:lightgreen">{value.result}</td>')
+                    elif value.exit_code == exit_code.ERROR.value:
+                        f.write(f'<td style="background-color:lightcoral">{value.result}</td>')
+                    elif value.exit_code == exit_code.NOT_ATTEMPTED.value:
+                        f.write(f'<td style="background-color:lightyellow">{value.result}</td>')
+                else:
+                    f.write(f'<td>{value}</td>')
+            f.write('</tr>\n')
+        f.write('</table></body></html>')
 
-    student_files = os.listdir(student_path)
 
-    for path in student_files:
-        if path in ["src", "bin"]:
+def extract_student_zips():
+    all_subpaths = listdir('.')
+    for subpath in all_subpaths:
+        print(subpath)
+        if not subpath[0].isnumeric():
             continue
-        if filename in path:
-            date = extract_date(path)
-            if most_recent_date is None or date > most_recent_date:
-                most_recent = path
-                most_recent_date = date
 
-    return most_recent
+        person_name = subpath.split('-')[2].strip()
+        person_name = person_name.split(' ')[1] + ', ' + person_name.split(' ')[0]
+        print(person_name)
 
+        if not p.exists(person_name):
+            makedirs(person_name)
 
-# def find_main_cpp(path):
-#     if os.path.isfile(path):
-#         if path.endswith(".cpp"):
-#             return os.path.join(os.getcwd(), path)
-#         else:
-#             return None
-#     elif os.path.isdir(path):
-#         for root, dirs, files in os.walk(path):
-#             for file in files:
-#                 if file.endswith(".cpp"):
-#                     return (os.path.join(root, file))
+        folder = ''.join(subpath.split('-')[:-1]).strip()
 
-def rename_files(student_path):
-    # get the names of all the files in the path
-    # get the most recent version, and copy it to src
-    file_names = []
-    for file in os.listdir(student_path):
-        # assuming the file names don't have spaces in them
-        name = file.split(' ')[-1]
-        file_names.append(name)
-
-    #  remove duplicates
-    file_names = list(set(file_names))
-
-    for file in file_names:
-        most_recent = get_most_recent_file(file, student_path)
-        if most_recent is not None:
-            shutil.copy(most_recent, os.path.join(student_path, "src", file))
-
-
-def to_csv(results):
-    # write the results to a csv file
-    # convert results to a grid on a webpage
-    # if success then make the cell green
-    # if failure then make the cell red
-    # add border to the table
-    with open("results.csv", "w") as f:
-        for student in results:
-            f.write(str(student) + ",")
-            for result in results[student]:
-                f.write(str(result[1]) + ",")
-            f.write("\n")
-
-    with open("results.html", "w") as f:
-        f.write("<table border=\"1\">")
-        for student in results:
-            f.write("<tr>")
-            f.write("<td>" + student + "</td>")
-            for result in results[student]:
-                if str(result[0]) == "Compilation":
-                    if str(result[1]) == "SUCCESS":
-                        f.write("<td bgcolor=\"green\">" + str(result[1]) + "</td>")
-                    else:
-                        f.write("<td bgcolor=\"red\">" + str(result[1]) + "</td>")
-                elif str(result[0]) == "Mixed Files":
-                    if str(result[1]) == "True":
-                        f.write("<td bgcolor=\"blue\">" + str(result[1]) + "</td>")
-                    else:
-                        f.write("<td bgcolor=\"white\">" + str(result[1]) + "</td>")
-            f.write("</tr>")
-        f.write("</table>")
-
-
-def compile_all():
-    results = {}
-    # get all the directories in the current directory
-    all_paths = os.listdir(os.getcwd())
-    original_path = os.getcwd()
-    # go into each students directory
-    for path in all_paths:
-        if os.path.isfile(os.path.join(original_path, path)):
-            continue
-        result = []
-        name = path
-        os.chdir(original_path)
-        os.chdir(path)
-
-        # check to see if there is a mix of files and directories
-        files_present, directories_present = False, False
-        for file in os.listdir(os.getcwd()):
-            if os.path.isfile(file):
-                files_present = True
-            if os.path.isdir(file):
-                directories_present = True
-
-        result.append(("Mixed Files", files_present and directories_present))
-
-        # create a src directory if it doesn't exist
-        if "src" not in os.listdir(os.getcwd()):
-            os.mkdir("src")
-
-        # create a bin directory if it doesn't exist
-        if "bin" not in os.listdir(os.getcwd()):
-            os.mkdir("bin")
-
-        # find the most recent main.cpp
-        most_recent = get_most_recent_path(os.listdir(os.getcwd()))
-
-        if os.path.isdir(most_recent):
-            # copy all files into src
-            for root, dirs, files in os.walk(most_recent):
-                for file in files:
-                    shutil.copy(os.path.join(root, file), os.path.join(os.getcwd(), "src", file))
+        if subpath[-4:] == ".zip":
+            with zipfile.ZipFile(subpath, 'r') as zip_ref:
+                zip_ref.extractall(f"{person_name}/{folder}")
+            remove(subpath)
         else:
-            # we need to copy the files and rename them so imports work
-            rename_files(os.getcwd())
+            # 189812-587374 - Andrew Mee- Feb 15, 2023 741 PM - amee_1.cpp
+            # cutting the file name off the brightspace generation to group files based time submitted
 
-        src_path = os.path.join(os.getcwd(), "src")
+            if not p.exists(f"{person_name}/{folder}"):
+                makedirs(f"{person_name}/{folder}")
+            rename(subpath, f"{person_name}/{folder}/{subpath}")
 
-        os.chdir(src_path)
 
-        # compile the main.cpp and report errors
-        try:
-            binary_path = os.path.join(original_path, path, "bin", "out.exe")
-            if COMPILER_FLAGS == "":
-                subprocess.run([COMPILER, "*.cpp", "-o", binary_path], check=True, capture_output=True)
-            else:
-                subprocess.run(
-                    [COMPILER, *COMPILER_FLAGS, "*.cpp", "-o", binary_path],
-                    check=True, capture_output=True)
-            result.append(("Compilation", "SUCCESS"))
+def recursively_extract_zips():
+    # recursively extract all zips in the current directory
+    all_subpaths = listdir('.')
+    for spath in all_subpaths:
+        # mac leaves this random folder full of propritary  files
+        if spath == '__MACOSX':
+            continue
+        print(spath)
+        if spath[-4:] == ".zip":
+            with zipfile.ZipFile(spath, 'r') as zip_ref:
+                zip_ref.extractall(f"{spath[:-4]}")
+            remove(spath)
+        else:
+            if p.isdir(spath):
+                chdir(spath)
+                recursively_extract_zips()
+                chdir('..')
 
-        except subprocess.CalledProcessError as e:
-            # get the error message
-            result.append(("Compilation", f"Compilation failed Exception err={e.stderr}\n out={e.stdout}"))
 
-        results[name] = result
+def remove_old_submissions():
+    all_subpaths = listdir('.')
+    for spath in all_subpaths:
+        # prevents reruns deleting files
+        if p.isfile(f"{spath}/.latest"):
+            continue
 
-    os.chdir(original_path)
-    to_csv(results)
+        if ',' not in spath:
+            continue
 
-    # write errors to a file
+        os.makedirs(f"{spath}/.latest", exist_ok=True)
+        folders = listdir(spath)
+        most_recent_folder = get_most_recent_path(folders)
+        for folder in folders:
+            if folder != most_recent_folder:
+                shutil.rmtree(f"{spath}/{folder}")
+
+
+def find_file_path(file_name):
+    for root, dirs, files in os.walk(os.getcwd()):
+
+        if file_name in files:
+            return os.path.join(root, file_name)
+
+        for f in files:
+            if f.split('-')[-1].strip() == file_name:
+                return os.path.join(root, f)
+
+
+def get_zips_in_dir():
+    all_subpaths = listdir('.')
+    zips = []
+    for spath in all_subpaths:
+        if spath[-4:] == ".zip":
+            zips.append(spath)
+    return zips
+
+
+def run_command(command) -> tuple[int, subprocess.CompletedProcess]:
+    # run a command and print the output
+    # record the error and return that if there is an error
+
+    try:
+        output = subprocess.run(command, check=True, capture_output=True, timeout=TIMEOUT)
+        return output.stdout.decode('utf-8'), output.returncode
+    except subprocess.CalledProcessError as e:
+        # get the error message
+        return f"Exception err={e.stderr.decode('utf-8')}\n out={e.stdout.decode('utf-8')}", e.returncode
+    except subprocess.TimeoutExpired as e:
+        return f"Timeout expired ({TIMEOUT}s)", 1
+
+
+def run_test(test_case: test_result, command: list[str]):
+    test_case.result, test_case.exit_code = run_command(command)
+    return test_case.exit_code
+
+
+def cleanup():
+    chdir('..')
+    chdir('..')
+
+
+def grade_part_1():
+    '''
+    The function should be called from the directory that contains all the students folders
+    '''
+    results = []
+
+    student_dirs = [student for student in listdir('.') if p.isdir(student)]
+
+    for i, student in enumerate(student_dirs):
+        print_progress_bar(i, len(student_dirs), suffix=student)
+
+        student_results = None
+        student_results = part1(student)
+        results.append(student_results)
+        chdir(student)
+
+        if os.path.exists('part1'):
+            shutil.rmtree('part1')
+
+        shutil.copytree('../../Project1_Grading_S2022/allFile2StudentFolder/', 'part1')
+
+        rsa_path = find_file_path('rsa435.cc')
+
+        if not rsa_path:
+            student_results.rsa_file_found.exit_code = 1
+            cleanup()
+            continue
+        else:
+            student_results.rsa_file_found.exit_code = 0
+
+        # copy students rsa435.cc into the folder
+        shutil.copy(rsa_path, 'part1')
+        # make all
+        chdir('part1')
+
+        # run make all and check for errors
+        if run_test(student_results.rsa_file_compiles, ['make', 'all']) != 0:
+            cleanup()
+            continue
+
+        # run .\rsa435.exe
+        if run_test(student_results.rsa_file_runs, ['./rsa435.exe']) != 0:
+            cleanup()
+            continue
+
+        # check for e_n.txt, d_n.txt p_q.txt
+        if not p.exists('e_n.txt') or not p.exists('d_n.txt') or not p.exists('p_q.txt'):
+            student_results.keys_file_found.exit_code = 1
+            cleanup()
+            continue
+        else:
+            student_results.keys_file_found.exit_code = 0
+
+        # make gradeing
+        if run_test(student_results.grading_builds, ['make', 'grading']) != 0:
+            cleanup()
+            continue
+
+        # run .\RSAPartIGrading -- get output
+        if run_test(student_results.grading_runs, ['.\RSAPartIGrading']) != 0:
+            cleanup()
+            continue
+        else:
+            student_results.grading_runs.result = f"{student_results.grading_runs.result.count('pass')}:6\n{student_results.grading_runs.result}"
+
+        cleanup()
+    return results
+
+
+def grade_part_2():
+    pass    # make a folder called part 2
+    # copy all the files into the folder
+
+
+def get_assignment_name(zip_path: str) -> str:
+    if zip_path[0] == 'A' or zip_path[0] == 'P':
+        assignment_name = zip_path.split(' ')[0]
+    else:
+        words = zip_path.split(' ')
+        assignment_name = "{} {}".format(words[1], words[2])
+    return assignment_name
+
+
+def unzip_assignment(zip_path: str):
+    # unzip the assignment
+    assignment_name = get_assignment_name(zip_path)
+
+    if p.exists(assignment_name):
+        raise Exception(f"{assignment_name} already exists")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(f"{assignment_name}")
+    # if zips folder doesn't exist then make it
+    if not p.exists("zips"):
+        makedirs("zips")
+    # shutil.move(path, f"zips/{path}")
+    chdir(assignment_name)
+    extract_student_zips()
+    recursively_extract_zips()
+    chdir('..')
 
 
 if __name__ == "__main__":
-
+    '''
+        Arguments:
+        -f or --force: remove and rewrite the unzipped files
+        --unzip: unzip all the zips in the current directory
+        --p1: grade part 1
+        --p2: grade part 2
+    '''
     start_dir = getcwd()
+    force = False
 
-    all_paths = listdir('.')
+    # sys.argv.append('--force')
+    # sys.argv.append('--unzip')
+    sys.argv.append('--p1')
+    # sys.argv.append('--p2')
 
-    for path in all_paths:
-        print(path)
-        if path[-4:] == ".zip":
-            if path[0] == 'A':
-                name = path.split(' ')[0]
-            else:
-                words = path.split(' ')
-                name = "{} {}".format(words[1], words[2])
-            with zipfile.ZipFile(path, 'r') as zip_ref:
-                zip_ref.extractall(f"{name}")
-            # if zips folder doesn't exist then make it
-            if not p.exists("zips"):
-                makedirs("zips")
-            #shutil.move(path, f"zips/{path}")
-            chdir(name)
-            all_subpaths = listdir('.')
-            for spath in all_subpaths:
-                print(spath)
-                if spath[0].isnumeric():
-                    person_name = spath.split('-')[2].strip()
-                    person_name = person_name.split(' ')[1] + ', ' + person_name.split(' ')[0]
-                    print(person_name)
-                    if not p.exists(person_name):
-                        makedirs(person_name)
-                    if spath[-4:] == ".zip":
-                        with zipfile.ZipFile(spath, 'r') as zip_ref:
-                            zip_ref.extractall(f"{person_name}/{spath}")
-                        remove(spath)
-                    else:
-                        rename(spath, f"{person_name}/{spath}")
-            compile_all()
-            chdir(start_dir)
+    if len(sys.argv) == 1:
+        print("Please specify an argument")
+        print("--unzip: unzip assignments in the current directory")
+        print("--p1: grade part 1")
+        print("--p2: grade part 2")
+        exit(1)
+
+    if '--force' in sys.argv or '-f' in sys.argv:
+        force = True
+
+    if '--unzip' in sys.argv:
+        zips = get_zips_in_dir()
+        print("enter a number to unzip a specific zip")
+        for i, zip in enumerate(zips):
+            print(f"{i}: {zip}")
+        print(f"{len(zips)}: all")
+        choice = input("Enter a number: ")
+        if choice == str(len(zips)):
+            for zip in zips:
+                if force:
+                    shutil.rmtree(get_assignment_name(zip))
+                unzip_assignment(zip)
+        else:
+            if force:
+                shutil.rmtree(get_assignment_name(zips[int(choice)]))
+            unzip_assignment(zips[int(choice)])
+
+    if '--p1' in sys.argv:
+        dirs = listdir('.')
+        print("Pick a directory to grade")
+        for i, dir in enumerate(dirs):
+            print(f"{i}: {dir}")
+        choice = input("Enter a number: ")
+        chdir(dirs[int(choice)])
+        remove_old_submissions()
+        results = grade_part_1()
+        to_html(results, 'part1.html')
+        chdir(start_dir)
+
+    if '--p2' in sys.argv:
+        dirs = listdir('.')
+        print("Pick a directory to grade")
+        for i, dir in enumerate(dirs):
+            print(f"{i}: {dir}")
+        choice = input("Enter a number: ")
+        chdir(dirs[int(choice)])
+        remove_old_submissions()
+        results = grade_part_2()
+        to_html(results, 'part2.html')
+        chdir(start_dir)

@@ -9,6 +9,10 @@ import os
 import sys
 import subprocess
 import datetime
+import asyncio
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # timeout in seconds for each test
 TIMEOUT = 4*60
@@ -250,8 +254,8 @@ def remove_old_submissions():
                 shutil.rmtree(f"{spath}/{folder}")
 
 
-def find_file_path(file_name):
-    for root, dirs, files in os.walk(os.getcwd()):
+def find_file_path(file_name, cwd=os.getcwd()):
+    for root, dirs, files in os.walk(cwd):
 
         if file_name in files:
             return os.path.join(root, file_name)
@@ -270,12 +274,12 @@ def get_zips_in_dir():
     return zips
 
 
-def run_command(command) -> tuple[int, subprocess.CompletedProcess]:
+async def run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[int, subprocess.CompletedProcess]:
     # run a command and print the output
     # record the error and return that if there is an error
 
     try:
-        output = subprocess.run(command, check=True, capture_output=True, timeout=TIMEOUT)
+        output = subprocess.run(command, check=True, capture_output=True, timeout=TIMEOUT, cwd=cwd)
         return output.stdout.decode('utf-8'), output.returncode
     except subprocess.CalledProcessError as e:
         # get the error message
@@ -284,83 +288,94 @@ def run_command(command) -> tuple[int, subprocess.CompletedProcess]:
         return f"Timeout expired ({TIMEOUT}s)", 1
 
 
-def run_test(test_case: test_result, command: list[str]):
-    test_case.result, test_case.exit_code = run_command(command)
+async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int():
+    test_case.result, test_case.exit_code = await run_command(command, cwd)
     return test_case.exit_code
 
 
-def cleanup():
-    chdir('..')
-    chdir('..')
+async def async_broker(function: callable(str)) -> list():
+    results = []
+    student_dirs = [student for student in listdir('.') if p.isdir(student)]
+    student_dirs = student_dirs[:4]
+    student_tasks = [function(student) for student in student_dirs]
+    while student_tasks:
+        finished, unfinished = await asyncio.wait(student_tasks, return_when=asyncio.FIRST_COMPLETED)
+        print_progress_bar(len(finished), len(student_dirs))
+        student_tasks = unfinished
+
+    for task in finished:
+        results.append(task.result())
+    return results
 
 
-def grade_part_1():
+def grade_all_students(function: callable(str)) -> list():
+    loop = asyncio.get_event_loop()
+    results = loop.run_until_complete(async_broker(function))
+    return results
+
+
+async def grade_part_1(student: str) -> part1:
     '''
     The function should be called from the directory that contains all the students folders
     '''
-    results = []
+    student_results = part1(student)
+    print(f"Grading {student}")
 
-    student_dirs = [student for student in listdir('.') if p.isdir(student)]
+    part1_path = os.path.join(os.getcwd(), student, 'part1')
+    test_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', 'allFile2StudentFolder')
 
-    for i, student in enumerate(student_dirs):
-        print_progress_bar(i, len(student_dirs), suffix=student)
+    if os.path.exists(part1_path):
+        shutil.rmtree(part1_path)
 
-        student_results = None
-        student_results = part1(student)
-        results.append(student_results)
-        chdir(student)
+    shutil.copytree(test_files_folder, part1_path)
 
-        if os.path.exists('part1'):
-            shutil.rmtree('part1')
+    rsa_path = find_file_path('rsa435.cc', student)
 
-        shutil.copytree('../../Project1_Grading_S2022/allFile2StudentFolder/', 'part1')
+    if not rsa_path:
+        student_results.rsa_file_found.exit_code = 1
+        return student_results
+    else:
+        student_results.rsa_file_found.exit_code = 0
 
-        rsa_path = find_file_path('rsa435.cc')
+    # copy students rsa435.cc into the folder
+    shutil.copy(rsa_path, part1_path)
+    # make all
 
-        if not rsa_path:
-            student_results.rsa_file_found.exit_code = 1
-            cleanup()
-            continue
-        else:
-            student_results.rsa_file_found.exit_code = 0
+    # run make all and check for errors
+    if await run_test(student_results.rsa_file_compiles, ['make', 'all'], part1_path) != 0:
+        return student_results
+    print(f"rsa435.cc compiles for {student}")
 
-        # copy students rsa435.cc into the folder
-        shutil.copy(rsa_path, 'part1')
-        # make all
-        chdir('part1')
+    # run .\rsa435.exe
+    binary_path = os.path.join(part1_path, 'rsa435.exe')
+    if await run_test(student_results.rsa_file_runs, [binary_path], part1_path) != 0:
+        return student_results
+    print(f"rsa435.exe runs for {student}")
 
-        # run make all and check for errors
-        if run_test(student_results.rsa_file_compiles, ['make', 'all']) != 0:
-            cleanup()
-            continue
+    # check for e_n.txt, d_n.txt p_q.txt
+    files = ['e_n.txt', 'd_n.txt', 'p_q.txt']
+    absolute_files = [os.path.join(part1_path, file) for file in files]
 
-        # run .\rsa435.exe
-        if run_test(student_results.rsa_file_runs, ['./rsa435.exe']) != 0:
-            cleanup()
-            continue
+    if not any([os.path.exists(file) for file in absolute_files]):
+        student_results.keys_file_found.exit_code = 1
+        return student_results
+    else:
+        student_results.keys_file_found.exit_code = 0
 
-        # check for e_n.txt, d_n.txt p_q.txt
-        if not p.exists('e_n.txt') or not p.exists('d_n.txt') or not p.exists('p_q.txt'):
-            student_results.keys_file_found.exit_code = 1
-            cleanup()
-            continue
-        else:
-            student_results.keys_file_found.exit_code = 0
+    # make gradeing
+    if await run_test(student_results.grading_builds, ['make', 'grading'], part1_path) != 0:
+        return student_results
+    print(f"grading builds for {student}")
 
-        # make gradeing
-        if run_test(student_results.grading_builds, ['make', 'grading']) != 0:
-            cleanup()
-            continue
+    # run .\RSAPartIGrading -- get output
+    binary_path = os.path.join(part1_path, 'RSAPartIGrading')
+    if await run_test(student_results.grading_runs, [binary_path], part1_path) != 0:
+        return student_results
+    else:
+        student_results.grading_runs.result = f"{student_results.grading_runs.result.count('pass')}:6\n{student_results.grading_runs.result}"
+    print(f"grading runs for {student}")
 
-        # run .\RSAPartIGrading -- get output
-        if run_test(student_results.grading_runs, ['.\RSAPartIGrading']) != 0:
-            cleanup()
-            continue
-        else:
-            student_results.grading_runs.result = f"{student_results.grading_runs.result.count('pass')}:6\n{student_results.grading_runs.result}"
-
-        cleanup()
-    return results
+    return student_results
 
 
 def grade_part_2():
@@ -446,7 +461,9 @@ if __name__ == "__main__":
         choice = input("Enter a number: ")
         chdir(dirs[int(choice)])
         remove_old_submissions()
-        results = grade_part_1()
+        now = datetime.datetime.now()
+        results = grade_all_students(grade_part_1)
+        print(f"Time to grade: {(datetime.datetime.now() - now).total_seconds():.2f}s")
         to_html(results, 'part1.html')
         chdir(start_dir)
 

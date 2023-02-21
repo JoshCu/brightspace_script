@@ -2,7 +2,10 @@ from os import listdir, makedirs, rename, remove, chdir, getcwd
 from os import path as p
 import shutil
 import zipfile
+import psutil
+import traceback
 
+from typing import Callable
 from dataclasses import dataclass
 from enum import Enum
 import os
@@ -15,7 +18,10 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # timeout in seconds for each test
-TIMEOUT = 15
+TIMEOUT = 20
+
+# list of processes to stop after each part of the assignment
+GLOBAL_CLEANUP = []
 
 # give either full path to compiler or just the name of the compiler
 # if just the name of the compiler, it will assume it is in the path
@@ -28,50 +34,69 @@ HIDE_SUCCESS = False
 class exit_code(Enum):
     SUCCESS = 0
     ERROR = 1
-    COMPILATION_ERROR = 2
     NOT_ATTEMPTED = -1
 
 
 @dataclass
 class test_result:
+    # if exit code isn't valid, then set it to 1
     result: str = ""
-    exit_code: int = exit_code.NOT_ATTEMPTED.value
+    _exit_code: int = exit_code.NOT_ATTEMPTED.value
+
+    @property
+    def exit_code(self):
+        return self._exit_code
+
+    @exit_code.setter
+    def exit_code(self, value):
+        if not any(value == code.value for code in exit_code):
+            self._exit_code = 1
+        else:
+            self._exit_code = value
 
 
 @dataclass
 class part1:
     student_name: str
-    rsa_file_found: test_result = None
-    rsa_file_compiles: test_result = None
-    rsa_file_runs: test_result = None
-    keys_file_found: test_result = None
-    grading_builds: test_result = None
-    grading_runs: test_result = None
+    rsa_file_found: test_result = None     # type: ignore
+    rsa_file_compiles: test_result = None  # type: ignore
+    rsa_file_runs: test_result = None      # type: ignore
+    keys_file_found: test_result = None    # type: ignore
+    grading_builds: test_result = None     # type: ignore
+    grading_runs: test_result = None       # type: ignore
 
     # if you don't do this, the attributes of the class will be shared between all instances
     def __post_init__(self):
         for attr in self.__dict__.keys():
             if self.__annotations__[attr] == test_result:
                 setattr(self, attr, test_result())
+
+    # allows you to access the attributes of the class using index like syntax
+    def __getitem__(self, items):
+        return getattr(self, items)
 
 
 @dataclass
 class part2:
     student_name: str
-    message_file_found: test_result = None
-    message_file_compiles: test_result = None
-    oneline_txt_signed: test_result = None
-    twoline_txt_signed: test_result = None
-    bible_txt_signed: test_result = None
-    oneline_txt_verified: test_result = None
-    twoline_txt_verified: test_result = None
-    bible_txt_verified: test_result = None
+    message_file_found: test_result = None     # type: ignore
+    message_file_compiles: test_result = None  # type: ignore
+    one_line_signed: test_result = None        # type: ignore
+    two_line_signed: test_result = None        # type: ignore
+    bible_part1_signed: test_result = None     # type: ignore
+    one_line_verified: test_result = None      # type: ignore
+    two_line_verified: test_result = None      # type: ignore
+    bible_part1_verified: test_result = None   # type: ignore
 
     # if you don't do this, the attributes of the class will be shared between all instances
     def __post_init__(self):
         for attr in self.__dict__.keys():
             if self.__annotations__[attr] == test_result:
                 setattr(self, attr, test_result())
+
+    # allows you to access the attributes of the class using index like syntax
+    def __getitem__(self, items):
+        return getattr(self, items)
 
 # funtion to print a progress bar to the console
 
@@ -91,7 +116,7 @@ def print_progress_bar(
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r)
     """
-    length -= len(prefix) + len(suffix) + 10
+    length -= len(prefix) + len(suffix) + 11
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
@@ -110,7 +135,7 @@ def find_AM_PM(path):
     elif "PM" in path:
         return path.index("PM")
     else:
-        return None
+        raise ValueError(f"AM or PM not found in path {path}")
 
 
 def extract_date(path):
@@ -181,9 +206,11 @@ def to_html(results, filename="results.html"):
             for header in headers:
                 value = getattr(result, header)
                 if isinstance(value, test_result):
+                    # strip all non utf-8 characters
+                    value.result = value.result.encode('ascii', 'ignore').decode('ascii')
                     if value.exit_code == exit_code.SUCCESS.value:
                         f.write(f'<td style="background-color:lightgreen">{value.result}</td>')
-                    elif value.exit_code == exit_code.ERROR.value or value.exit_code == exit_code.COMPILATION_ERROR.value:
+                    elif value.exit_code == exit_code.ERROR.value:
                         f.write(f'<td style="background-color:lightcoral">{value.result}</td>')
                     elif value.exit_code == exit_code.NOT_ATTEMPTED.value:
                         f.write(f'<td style="background-color:lightyellow">{value.result}</td>')
@@ -243,7 +270,9 @@ def recursively_extract_zips():
 
 def remove_old_submissions():
     all_subpaths = listdir('.')
+
     for spath in all_subpaths:
+
         # prevents reruns deleting files
         if p.isfile(f"{spath}/.latest"):
             continue
@@ -251,8 +280,11 @@ def remove_old_submissions():
         if ',' not in spath:
             continue
 
-        os.makedirs(f"{spath}/.latest", exist_ok=True)
         folders = listdir(spath)
+
+        with open(f"{spath}/.latest", 'w') as f:
+            f.write('')
+
         most_recent_folder = get_most_recent_path(folders)
         for folder in folders:
             if folder != most_recent_folder:
@@ -279,29 +311,59 @@ def get_zips_in_dir():
     return zips
 
 
-async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[int, subprocess.CompletedProcess]:
+def kill_running_processes(to_kill: list[str]):
+    if not to_kill:
+        return
+    unique_processes = list(set(to_kill))
+    unique_processes = [os.path.basename(p) for p in unique_processes]
+    try:
+        print(f'Killing processes {unique_processes}')
+        processes = psutil.process_iter()
+        for process in processes:
+            try:
+                if process.name() in unique_processes or process.name().split('.')[0] in unique_processes:
+                    print(f'found {process.name()}')
+                    process.terminate()
+            except Exception:
+                print(f"{traceback.format_exc()}")
+
+    except Exception:
+        print(f"{traceback.format_exc()}")
+
+
+async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[str, int]:
     # run a command and print the output
     # record the error and return that if there is an error
     try:
         output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
         stdout, stderr = await asyncio.wait_for(output.communicate(), timeout=TIMEOUT)
-        return stdout.decode('utf-8'), output.returncode
+        # if return code is None, then the process was killed, return error
+        if output.returncode is None:
+            return f"Process was killed", exit_code.ERROR.value
+        elif output.returncode == 0:
+            return stdout.decode('utf-8', errors='ignore'), output.returncode
+        else:
+            return stderr.decode('utf-8', errors='ignore'), output.returncode
     except subprocess.CalledProcessError as e:
         # get the error message
-        return f"Exception err={e.stderr.decode('utf-8')}\n out={e.stdout.decode('utf-8')}", e.returncode
+        return f"Exception err={e.stderr.decode('utf-8',errors='ignore')}\n out={e.stdout.decode('utf-8',errors='ignore')}", e.returncode
     except asyncio.TimeoutError:
+        GLOBAL_CLEANUP.append(command[0])
         return f"Timeout after {TIMEOUT} seconds", exit_code.ERROR.value
 
 
-async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int():
+async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int:
     test_case.result, test_case.exit_code = await async_run_command(command, cwd)
     return test_case.exit_code
 
 
-async def async_broker(function: callable(str)) -> list():
+async def async_broker(function: Callable) -> list:
     results = []
     counter = 0
     student_dirs = [student for student in listdir('.') if p.isdir(student)]
+    # below is for testing
+    # student_dirs = [student_dirs[29]]
+    # print(student_dirs)
     student_tasks = [function(student) for student in student_dirs]
     print_progress_bar(0, len(student_dirs), prefix='Progress:', suffix='Complete')
     while student_tasks:
@@ -314,16 +376,16 @@ async def async_broker(function: callable(str)) -> list():
     return results
 
 
-def grade_all_students(function: callable(str)) -> list():
+def grade_all_students(function: Callable) -> list:
     loop = asyncio.get_event_loop()
     results = loop.run_until_complete(async_broker(function))
+    kill_running_processes(GLOBAL_CLEANUP)
+    GLOBAL_CLEANUP.clear()
     return results
 
 
 async def grade_part_1(student: str) -> part1:
-    '''
-    The function should be called from the directory that contains all the students folders
-    '''
+
     student_results = part1(student)
 
     part1_path = os.path.join(os.getcwd(), student, 'part1')
@@ -352,7 +414,7 @@ async def grade_part_1(student: str) -> part1:
 
     # run .\rsa435.exe
 
-    binary_path = os.path.join(part1_path, 'rsa435.exe')
+    binary_path = os.path.join(part1_path, 'rsa435')
     if await run_test(student_results.rsa_file_runs, [binary_path], part1_path) != 0:
         return student_results
 
@@ -380,9 +442,58 @@ async def grade_part_1(student: str) -> part1:
     return student_results
 
 
-def grade_part_2():
-    pass    # make a folder called part 2
-    # copy all the files into the folder
+async def grade_part_2(student: str) -> part2:
+
+    student_results = part2(student)
+
+    part2_path = os.path.join(os.getcwd(), student, 'part2')
+    test_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', 'allFile2StudentFolder - copy')
+    key_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', '435WorkingKeys')
+
+    if os.path.exists(part2_path):
+        shutil.rmtree(part2_path)
+
+    shutil.copytree(test_files_folder, part2_path, dirs_exist_ok=True)
+    shutil.copytree(key_files_folder, part2_path, dirs_exist_ok=True)
+
+    message_path = find_file_path('messageDigest435.cpp', student)
+
+    if not message_path:
+        student_results.message_file_found.exit_code = 1
+        return student_results
+    else:
+        student_results.message_file_found.exit_code = 0
+
+        # copy students rsa435.cc into the folder
+    shutil.copy(message_path, part2_path)
+
+    # run make all and check for errors
+    if await run_test(student_results.message_file_compiles, ['make', 'digest'], part2_path) != 0:
+        return student_results
+
+    test_files = ['one_line.txt', 'two_line.txt', 'bible_part1.txt']
+    binary_path = os.path.join(part2_path, 'RSAPart2Grading')
+    sign_tasks = []
+    verify_tasks = []
+    for file in test_files:
+        sign_tasks.append(
+            asyncio.create_task(
+                run_test(student_results[f'{file[:-4]}_signed'],
+                         [binary_path, 's', os.path.join(part2_path, file)],
+                         part2_path)))
+        verify_tasks.append(asyncio.create_task(
+            run_test(
+                student_results[f'{file[:-4]}_verified'],
+                [binary_path, 'v', os.path.join(part2_path, file), os.path.join(part2_path, f'{file}.signature')],
+                part2_path)))
+
+    # run sign tasks
+    await asyncio.gather(*sign_tasks)
+
+    # run verify tasks
+    await asyncio.gather(*verify_tasks)
+
+    return student_results
 
 
 def get_assignment_name(zip_path: str) -> str:
@@ -415,30 +526,30 @@ def unzip_assignment(zip_path: str):
 if __name__ == "__main__":
     '''
         Arguments:
-        -f or --force: remove and rewrite the unzipped files
-        --unzip: unzip all the zips in the current directory
-        --p1: grade part 1
-        --p2: grade part 2
+        -f or -force: remove and rewrite the unzipped files
+        -unzip: unzip all the zips in the current directory
+        -p1: grade part 1
+        -p2: grade part 2
     '''
     start_dir = getcwd()
     force = False
 
-    # sys.argv.append('--force')
-    # sys.argv.append('--unzip')
-    sys.argv.append('--p1')
-    # sys.argv.append('--p2')
+    # sys.argv.append('-force')
+    # sys.argv.append('-unzip')
+    # sys.argv.append('-p1')
+    sys.argv.append('-p2')
 
     if len(sys.argv) == 1:
         print("Please specify an argument")
-        print("--unzip: unzip assignments in the current directory")
-        print("--p1: grade part 1")
-        print("--p2: grade part 2")
+        print("-unzip: unzip assignments in the current directory")
+        print("-p1: grade part 1")
+        print("-p2: grade part 2")
         exit(1)
 
-    if '--force' in sys.argv or '-f' in sys.argv:
+    if '-force' in sys.argv or '-f' in sys.argv:
         force = True
 
-    if '--unzip' in sys.argv:
+    if '-unzip' in sys.argv:
         zips = get_zips_in_dir()
         print("enter a number to unzip a specific zip")
         for i, zip in enumerate(zips):
@@ -455,13 +566,15 @@ if __name__ == "__main__":
                 shutil.rmtree(get_assignment_name(zips[int(choice)]))
             unzip_assignment(zips[int(choice)])
 
-    if '--p1' in sys.argv:
+    if '-p1' in sys.argv or '-p2' in sys.argv:
         dirs = listdir('.')
         print("Pick a directory to grade")
         for i, dir in enumerate(dirs):
             print(f"{i}: {dir}")
         choice = input("Enter a number: ")
         chdir(dirs[int(choice)])
+
+    if '-p1' in sys.argv:
         remove_old_submissions()
         now = datetime.datetime.now()
         results = grade_all_students(grade_part_1)
@@ -469,14 +582,10 @@ if __name__ == "__main__":
         to_html(results, 'part1.html')
         chdir(start_dir)
 
-    if '--p2' in sys.argv:
-        dirs = listdir('.')
-        print("Pick a directory to grade")
-        for i, dir in enumerate(dirs):
-            print(f"{i}: {dir}")
-        choice = input("Enter a number: ")
-        chdir(dirs[int(choice)])
+    if '-p2' in sys.argv:
         remove_old_submissions()
-        results = grade_part_2()
+        now = datetime.datetime.now()
+        results = grade_all_students(grade_part_2)
+        print(f"Time to grade: {(datetime.datetime.now() - now).total_seconds():.2f}s")
         to_html(results, 'part2.html')
         chdir(start_dir)

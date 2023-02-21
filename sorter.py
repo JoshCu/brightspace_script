@@ -164,6 +164,7 @@ def to_html(results, filename="results.html"):
     # use the result and exit_code variables in the test_result dataclass as the values
     # use the exit_code enum to determine the color of the cell
     # green for success, light red for error, yellow for not attempted
+    results = sorted(results, key=lambda x: x.student_name)
     headers = results[0].__annotations__.keys()
     with open(filename, 'w') as f:
         f.write('<html><body><table>\n')
@@ -274,13 +275,13 @@ def get_zips_in_dir():
     return zips
 
 
-async def run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[int, subprocess.CompletedProcess]:
+async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[int, subprocess.CompletedProcess]:
     # run a command and print the output
     # record the error and return that if there is an error
-
     try:
-        output = subprocess.run(command, check=True, capture_output=True, timeout=TIMEOUT, cwd=cwd)
-        return output.stdout.decode('utf-8'), output.returncode
+        output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
+        stdout, stderr = await output.communicate()
+        return stdout.decode('utf-8'), output.returncode
     except subprocess.CalledProcessError as e:
         # get the error message
         return f"Exception err={e.stderr.decode('utf-8')}\n out={e.stdout.decode('utf-8')}", e.returncode
@@ -289,22 +290,23 @@ async def run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[int, 
 
 
 async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int():
-    test_case.result, test_case.exit_code = await run_command(command, cwd)
+    test_case.result, test_case.exit_code = await async_run_command(command, cwd)
     return test_case.exit_code
 
 
 async def async_broker(function: callable(str)) -> list():
     results = []
+    counter = 0
     student_dirs = [student for student in listdir('.') if p.isdir(student)]
-    student_dirs = student_dirs[:4]
     student_tasks = [function(student) for student in student_dirs]
+    print_progress_bar(0, len(student_dirs))
     while student_tasks:
         finished, unfinished = await asyncio.wait(student_tasks, return_when=asyncio.FIRST_COMPLETED)
-        print_progress_bar(len(finished), len(student_dirs))
+        counter += len(finished)
+        print_progress_bar(counter, len(student_dirs))
         student_tasks = unfinished
-
-    for task in finished:
-        results.append(task.result())
+        for task in finished:
+            results.append(task.result())
     return results
 
 
@@ -319,7 +321,6 @@ async def grade_part_1(student: str) -> part1:
     The function should be called from the directory that contains all the students folders
     '''
     student_results = part1(student)
-    print(f"Grading {student}")
 
     part1_path = os.path.join(os.getcwd(), student, 'part1')
     test_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', 'allFile2StudentFolder')
@@ -344,13 +345,11 @@ async def grade_part_1(student: str) -> part1:
     # run make all and check for errors
     if await run_test(student_results.rsa_file_compiles, ['make', 'all'], part1_path) != 0:
         return student_results
-    print(f"rsa435.cc compiles for {student}")
 
     # run .\rsa435.exe
     binary_path = os.path.join(part1_path, 'rsa435.exe')
     if await run_test(student_results.rsa_file_runs, [binary_path], part1_path) != 0:
         return student_results
-    print(f"rsa435.exe runs for {student}")
 
     # check for e_n.txt, d_n.txt p_q.txt
     files = ['e_n.txt', 'd_n.txt', 'p_q.txt']
@@ -365,7 +364,6 @@ async def grade_part_1(student: str) -> part1:
     # make gradeing
     if await run_test(student_results.grading_builds, ['make', 'grading'], part1_path) != 0:
         return student_results
-    print(f"grading builds for {student}")
 
     # run .\RSAPartIGrading -- get output
     binary_path = os.path.join(part1_path, 'RSAPartIGrading')
@@ -373,7 +371,6 @@ async def grade_part_1(student: str) -> part1:
         return student_results
     else:
         student_results.grading_runs.result = f"{student_results.grading_runs.result.count('pass')}:6\n{student_results.grading_runs.result}"
-    print(f"grading runs for {student}")
 
     return student_results
 

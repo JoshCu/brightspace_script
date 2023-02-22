@@ -240,6 +240,7 @@ def extract_student_zips():
             makedirs(person_name)
 
         folder = ''.join(subpath.split('-')[:-1]).strip()
+        file = subpath.split('-')[-1].strip()
 
         if subpath[-4:] == ".zip":
             with zipfile.ZipFile(subpath, 'r') as zip_ref:
@@ -251,7 +252,7 @@ def extract_student_zips():
 
             if not p.exists(f"{person_name}/{folder}"):
                 makedirs(f"{person_name}/{folder}")
-            rename(subpath, f"{person_name}/{folder}/{subpath}")
+            rename(subpath, f"{person_name}/{folder}/{file}")
 
 
 def recursively_extract_zips():

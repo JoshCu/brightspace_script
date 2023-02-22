@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # timeout in seconds for each test
-TIMEOUT = 20
+TIMEOUT = 120
 
 # list of processes to stop after each part of the assignment
 GLOBAL_CLEANUP = []
@@ -196,6 +196,8 @@ def to_html(results, filename="results.html"):
     results = sorted(results, key=lambda x: x.student_name)
     headers = results[0].__annotations__.keys()
     with open(filename, 'w') as f:
+        # import style sheet freeze.css
+        f.write('<link rel="stylesheet" href="../freeze.css">\n')
         f.write('<html><body><table>\n')
         f.write('<tr>')
         for header in headers:
@@ -209,11 +211,14 @@ def to_html(results, filename="results.html"):
                     # strip all non utf-8 characters
                     value.result = value.result.encode('ascii', 'ignore').decode('ascii')
                     if value.exit_code == exit_code.SUCCESS.value:
-                        f.write(f'<td style="background-color:lightgreen">{value.result}</td>')
+                        f.write(
+                            f'<td style="background-color:lightgreen"><div class=scrollable>{value.result}</div></td>')
                     elif value.exit_code == exit_code.ERROR.value:
-                        f.write(f'<td style="background-color:lightcoral">{value.result}</td>')
+                        f.write(
+                            f'<td style="background-color:lightcoral"><div class=scrollable>{value.result}</div></td>')
                     elif value.exit_code == exit_code.NOT_ATTEMPTED.value:
-                        f.write(f'<td style="background-color:lightyellow">{value.result}</td>')
+                        f.write(
+                            f'<td style="background-color:lightyellow"><div class=scrollable>{value.result}</div></td>')
                 else:
                     f.write(f'<td>{value}</td>')
             f.write('</tr>\n')
@@ -568,6 +573,7 @@ if __name__ == "__main__":
 
     if '-p1' in sys.argv or '-p2' in sys.argv:
         dirs = listdir('.')
+        dirs = [dir for dir in dirs if p.isdir(dir)]
         print("Pick a directory to grade")
         for i, dir in enumerate(dirs):
             print(f"{i}: {dir}")
@@ -575,12 +581,12 @@ if __name__ == "__main__":
         chdir(dirs[int(choice)])
 
     if '-p1' in sys.argv:
+
         remove_old_submissions()
         now = datetime.datetime.now()
         results = grade_all_students(grade_part_1)
         print(f"Time to grade: {(datetime.datetime.now() - now).total_seconds():.2f}s")
         to_html(results, 'part1.html')
-        chdir(start_dir)
 
     if '-p2' in sys.argv:
         remove_old_submissions()
@@ -588,4 +594,3 @@ if __name__ == "__main__":
         results = grade_all_students(grade_part_2)
         print(f"Time to grade: {(datetime.datetime.now() - now).total_seconds():.2f}s")
         to_html(results, 'part2.html')
-        chdir(start_dir)

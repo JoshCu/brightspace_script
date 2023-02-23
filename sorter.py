@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # timeout in seconds for each test
-TIMEOUT = 120
+TIMEOUT = 5*60
 
 # list of processes to stop after each part of the assignment
 GLOBAL_CLEANUP = []
@@ -82,11 +82,14 @@ class part2:
     message_file_found: test_result = None     # type: ignore
     message_file_compiles: test_result = None  # type: ignore
     one_line_signed: test_result = None        # type: ignore
-    two_line_signed: test_result = None        # type: ignore
-    bible_part1_signed: test_result = None     # type: ignore
     one_line_verified: test_result = None      # type: ignore
-    two_line_verified: test_result = None      # type: ignore
+    one_line_modified: test_result = None      # type: ignore
+    two_lines_signed: test_result = None       # type: ignore
+    two_lines_verified: test_result = None     # type: ignore
+    two_lines_modified: test_result = None     # type: ignore
+    bible_part1_signed: test_result = None     # type: ignore
     bible_part1_verified: test_result = None   # type: ignore
+    bible_part1_modified: test_result = None   # type: ignore
 
     # if you don't do this, the attributes of the class will be shared between all instances
     def __post_init__(self):
@@ -210,6 +213,8 @@ def to_html(results, filename="results.html"):
                 if isinstance(value, test_result):
                     # strip all non utf-8 characters
                     value.result = value.result.encode('ascii', 'ignore').decode('ascii')
+                    # replace newlines with <br> so they are displayed correctly
+                    value.result = value.result.replace('\n', '<br>')
                     if value.exit_code == exit_code.SUCCESS.value:
                         f.write(
                             f'<td style="background-color:lightgreen"><div class=scrollable>{value.result}</div></td>')
@@ -349,7 +354,9 @@ async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple
         elif output.returncode == 0:
             return stdout.decode('utf-8', errors='ignore'), output.returncode
         else:
-            return stderr.decode('utf-8', errors='ignore'), output.returncode
+            return stderr.decode(
+                'utf-8', errors='ignore') + '\nERROR\n' + stdout.decode(
+                'utf-8', errors='ignore'), output.returncode
     except subprocess.CalledProcessError as e:
         # get the error message
         return f"Exception err={e.stderr.decode('utf-8',errors='ignore')}\n out={e.stdout.decode('utf-8',errors='ignore')}", e.returncode
@@ -368,7 +375,7 @@ async def async_broker(function: Callable) -> list:
     counter = 0
     student_dirs = [student for student in listdir('.') if p.isdir(student)]
     # below is for testing
-    # student_dirs = [student_dirs[29]]
+    # student_dirs = [student_dirs[25]]
     # print(student_dirs)
     student_tasks = [function(student) for student in student_dirs]
     print_progress_bar(0, len(student_dirs), prefix='Progress:', suffix='Complete')
@@ -453,7 +460,7 @@ async def grade_part_2(student: str) -> part2:
     student_results = part2(student)
 
     part2_path = os.path.join(os.getcwd(), student, 'part2')
-    test_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', 'allFile2StudentFolder - copy')
+    test_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', 'allFile2StudentFolder')
     key_files_folder = os.path.join(os.getcwd(), os.pardir, 'Project1_Grading_S2022', '435WorkingKeys')
 
     if os.path.exists(part2_path):
@@ -470,14 +477,17 @@ async def grade_part_2(student: str) -> part2:
     else:
         student_results.message_file_found.exit_code = 0
 
-        # copy students rsa435.cc into the folder
+    # copy students messageDigest435.cpp into the folder
     shutil.copy(message_path, part2_path)
 
     # run make all and check for errors
     if await run_test(student_results.message_file_compiles, ['make', 'digest'], part2_path) != 0:
         return student_results
 
-    test_files = ['one_line.txt', 'two_line.txt', 'bible_part1.txt']
+    if await run_test(test_result(), ['make', 'grading'], part2_path) != 0:
+        return student_results
+
+    test_files = ['one_line.txt', 'two_lines.txt', 'bible_part1.txt']
     binary_path = os.path.join(part2_path, 'RSAPart2Grading')
     sign_tasks = []
     verify_tasks = []
@@ -487,14 +497,52 @@ async def grade_part_2(student: str) -> part2:
                 run_test(student_results[f'{file[:-4]}_signed'],
                          [binary_path, 's', os.path.join(part2_path, file)],
                          part2_path)))
-        verify_tasks.append(asyncio.create_task(
-            run_test(
-                student_results[f'{file[:-4]}_verified'],
-                [binary_path, 'v', os.path.join(part2_path, file), os.path.join(part2_path, f'{file}.signature')],
-                part2_path)))
 
+    old_files = set(os.listdir(part2_path))
     # run sign tasks
     await asyncio.gather(*sign_tasks)
+    new_files = set(os.listdir(part2_path)) - old_files
+
+    with open(os.path.join(part2_path, 'modified.txt'), 'w') as f:
+        f.write("modified file test")
+
+    if len(new_files) == 0:
+        return student_results
+
+    # some students append .signature, some .signed, just get it straight from the files
+    signature_appenddix = None
+    signed_files = set()
+    for file in new_files:
+        if file.split('.')[-1].lower().startswith('sig'):
+            signature_appenddix = file.split('.')[-1]
+            signed_files.add(file)
+
+    if not signature_appenddix:
+        return student_results
+
+    for file in test_files:
+        verify_tasks.append(
+            asyncio.create_task(
+                run_test(
+                    student_results[f'{file[:-4]}_verified'],
+                    [binary_path, 'v', os.path.join(part2_path, file),
+                     os.path.join(part2_path, f'{os.path.join(part2_path, file)}.{signature_appenddix}')],
+                    part2_path)))
+        verify_tasks.append(
+            asyncio.create_task(
+                run_test(
+                    student_results[f'{file[:-4]}_modified'],
+                    [binary_path, 'v', os.path.join(part2_path, "modified.txt"),
+                     os.path.join(part2_path, f'{os.path.join(part2_path, file)}.{signature_appenddix}')],
+                    part2_path)))
+    signed_file_original_names = ['.'.join(file.split('.')[:-1]) for file in signed_files]
+    # students return codes are not consistent, so check if the file was signed
+    # if not, set the exit code to 1
+    for file in test_files:
+        if file not in signed_file_original_names:
+            student_results[f'{file[:-4]}_signed'].exit_code = 1
+            student_results[f'{file[:-4]}_verified'].exit_code = 1
+            student_results[f'{file[:-4]}_modified'].exit_code = 1
 
     # run verify tasks
     await asyncio.gather(*verify_tasks)

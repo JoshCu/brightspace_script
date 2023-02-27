@@ -591,7 +591,7 @@ if __name__ == "__main__":
     # sys.argv.append('-force')
     # sys.argv.append('-unzip')
     # sys.argv.append('-p1')
-    sys.argv.append('-p2')
+    # sys.argv.append('-p2')
 
     if len(sys.argv) == 1:
         print("Please specify an argument")

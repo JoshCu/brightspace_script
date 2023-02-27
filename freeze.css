@@ -51,6 +51,9 @@ td:nth-child(1) {
     width: fit-content;
     min-width: 80px;
     max-width: fit-content;
+}
+
+td:nth-child(1) {
     background: #fffdfd;
 }
 

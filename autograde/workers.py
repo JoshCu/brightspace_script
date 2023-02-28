@@ -5,7 +5,7 @@ import psutil
 
 from typing import Callable
 
-from datamodels import test_result, exit_code
+from common_datamodels import test_result, exit_code
 from render import print_progress_bar
 
 # timeout in seconds for each test
@@ -65,9 +65,9 @@ async def run_test(test_case: test_result, command: list[str], cwd: str = os.get
 async def async_broker(function: Callable) -> list:
     results = []
     counter = 0
-    student_dirs = [student for student in os.listdir('.') if os.isdir(student)]
+    student_dirs = [student for student in os.listdir('.') if os.path.isdir(student)]
     # below is for testing
-    # student_dirs = [student_dirs[25]]
+    # student_dirs = [student_dirs[1]]
     # print(student_dirs)
     student_tasks = [function(student) for student in student_dirs]
     print_progress_bar(0, len(student_dirs), prefix='Progress:', suffix='Complete')

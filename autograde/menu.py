@@ -3,9 +3,9 @@ import sys
 import shutil
 from datetime import datetime
 
-from autograde.file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_old_submissions
-from autograde.workers import grade_all_students
-from autograde.datamodels import argument
+from file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_old_submissions
+from workers import grade_all_students
+from datamodels import argument
 
 
 def get_choice(options: list) -> int:
@@ -49,7 +49,7 @@ def fetch_args(args_path):
     pass
 
 
-def print_args(args):
+def print_args(args=None):
     print("Please specify an argument")
     print("-unzip: unzip assignments in the current directory")
 
@@ -98,6 +98,12 @@ def menu():
     if '-force' in sys.argv or '-f' in sys.argv:
         force = True
 
+    if '-d' in sys.argv:
+        os.chdir('example')
+        assignment_zips(True)
+    else:
+        os.chdir('put_zips_here')
+
     if '-unzip' in sys.argv:
         assignment_zips(force)
 
@@ -120,4 +126,5 @@ def menu():
 
 
 if __name__ == '__main__':
+    os.chdir
     menu()

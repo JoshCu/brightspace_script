@@ -1,8 +1,8 @@
 import os
-from datamodels import test_result, exit_code
+from common_datamodels import test_result, exit_code
 
 
-def to_html(results, filename="results.html"):
+def to_html(results, filename="results.html", embed_style=True):
     # create an html file with the results in a table format
     # one row per student, use the variable names in the dataclass as the column headers
     # use the result and exit_code variables in the test_result dataclass as the values
@@ -12,7 +12,14 @@ def to_html(results, filename="results.html"):
     headers = results[0].__annotations__.keys()
     with open(filename, 'w') as f:
         # import style sheet freeze.css
-        f.write('<link rel="stylesheet" href="../freeze.css">\n')
+        if embed_style:
+            f.write('<style>\n')
+            print(os.getcwd())
+            with open('../../autograde/freeze.css', 'r') as style:
+                f.write(style.read())
+            f.write('</style>\n')
+        else:
+            f.write('<link rel="stylesheet" href="../../autograde/freeze.css">\n')
         f.write('<html><body><table>\n')
         f.write('<tr>')
         for header in headers:

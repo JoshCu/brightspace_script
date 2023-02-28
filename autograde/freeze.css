@@ -1,0 +1,83 @@
+table {
+    border-spacing: 0;
+    /* width: calc(100vw - 18px); */
+}
+
+body {
+    margin: 0;
+}
+
+th {
+    border-left: none;
+    border-right: 1px solid #bbbbbb;
+    padding: 5px;
+    /* width: 80px; */
+    min-width: 80px;
+    position: sticky;
+    top: 0;
+    background: #2a4a55;
+    color: #e0e0e0;
+    font-weight: normal;
+}
+
+
+td {
+    border-left: none;
+    border-right: 1px solid #667e86;
+    border-bottom: 1px solid #bbbbbb;
+    padding: 5px;
+    max-width: 40vw;
+    min-width: 80px;
+    overflow: auto;
+}
+
+
+
+@media (min-width: 1920px) {
+    td {
+        max-width: 60vw;
+    }
+}
+
+table>tbody>tr>td:nth-last-child(n+8),
+table>tbody>tr>td:nth-last-child(n+8)~td {
+    max-width: min(30vw, 300px);
+}
+
+th:nth-child(1),
+td:nth-child(1) {
+    position: sticky;
+    left: 0;
+    width: fit-content;
+    min-width: 80px;
+    max-width: fit-content;
+}
+
+td:nth-child(1) {
+    background: #fffdfd;
+}
+
+/***
+th:nth-child(2),
+td:nth-child(2) {
+    position: sticky;
+    /* 1st cell left/right padding + 1st cell width + 1st cell left/right border width 
+    /* 0 + 5 + 150 + 5 + 1 
+    left: 161px;
+    width: 50px;
+    min-width: 50px;
+}
+***/
+
+
+th:nth-child(1) {
+    z-index: 2;
+}
+
+div.scrollable {
+    height: 100%;
+    /* padding-right: 18px;
+    padding-bottom: 18px; 
+    overflow: overlay; */
+    max-height: 200px;
+}

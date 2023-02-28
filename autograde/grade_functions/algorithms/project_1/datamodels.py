@@ -1,5 +1,9 @@
+import sys
+import pathlib
+
 from dataclasses import dataclass
-from autograde.datamodels import test_result
+
+from ....datamodels import test_result
 
 
 @dataclass

@@ -82,6 +82,8 @@ def extract_student_zips():
         file = subpath.split('-')[-1].strip()
 
         if subpath[-4:] == ".zip":
+            if not os.path.exists(f"{person_name}/{folder}"):
+                os.makedirs(f"{person_name}/{folder}")
             with zipfile.ZipFile(subpath, 'r') as zip_ref:
                 zip_ref.extractall(f"{person_name}/{folder}")
             os.remove(subpath)
@@ -102,7 +104,7 @@ def recursively_extract_zips():
         if spath == '__MACOSX':
             continue
         print(spath)
-        if spath[-4:] == ".zip":
+        if spath[-4:] == ".zip" and not os.path.isdir(spath):
             with zipfile.ZipFile(spath, 'r') as zip_ref:
                 zip_ref.extractall(f"{spath[:-4]}")
             os.remove(spath)

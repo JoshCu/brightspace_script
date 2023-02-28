@@ -13,7 +13,8 @@
             "justMyCode": true,
             "args": [
                 "-d",
-                "-f"
+                "-f",
+                "-unzip"
             ]
         }
     ]

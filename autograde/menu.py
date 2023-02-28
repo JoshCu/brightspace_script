@@ -3,9 +3,11 @@ import sys
 import shutil
 from datetime import datetime
 
+from render import to_html
 from file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_old_submissions
 from workers import grade_all_students
-from datamodels import argument
+from common_datamodels import argument
+from common_tests import build_test, run_test
 
 
 def get_choice(options: list) -> int:
@@ -56,13 +58,11 @@ def print_args(args=None):
 
 def assignment_zips(force=False):
     zips = get_zips_in_dir()
-    print("enter a number to unzip a specific zip")
-    for i, zip in enumerate(zips):
-        print(f"{i}: {zip}")
-    print(f"{len(zips)}: all")
-    choice = input("Enter a number: ")
-    if choice == str(len(zips)):
-        for zip in zips:
+    zips = ['All', *zips]
+    print("Pick an assignment to unzip")
+    choice = get_choice(zips)
+    if choice == int(0):
+        for zip in zips[1:]:
             if force:
                 shutil.rmtree(get_assignment_name(zip))
             unzip_assignment(zip)
@@ -72,14 +72,19 @@ def assignment_zips(force=False):
         unzip_assignment(zips[int(choice)])
 
 
-def pick_directory():
+def pick_directory() -> bool:
     dirs = os.listdir('.')
     dirs = [dir for dir in dirs if os.path.isdir(dir)]
+    dirs = [dir for dir in dirs if dir != 'zips']
+    dirs = ['Exit', *dirs]
+
     print("Pick a directory to grade")
-    for i, dir in enumerate(dirs):
-        print(f"{i}: {dir}")
-    choice = input("Enter a number: ")
+    print("")
+    choice = get_choice(dirs)
+    if choice == 0:
+        return False
     os.chdir(dirs[int(choice)])
+    return True
 
 
 def menu():
@@ -100,15 +105,22 @@ def menu():
 
     if '-d' in sys.argv:
         os.chdir('example')
-        assignment_zips(True)
     else:
         os.chdir('put_zips_here')
 
     if '-unzip' in sys.argv:
         assignment_zips(force)
 
-    # if '-p1' in sys.argv or '-p2' in sys.argv:
-    #     pick_directory()
+    if pick_directory():
+        remove_old_submissions()
+        now = datetime.now()
+        results = grade_all_students(build_test)
+        print(f"Time to grade: {(datetime.now() - now).total_seconds():.2f}s")
+        to_html(results, 'build.html')
+        os.chdir(start_dir)
+        if '-unzip' in sys.argv:
+            sys.argv.remove('-unzip')
+        menu()
 
     # if '-p1' in sys.argv:
     #     remove_old_submissions()

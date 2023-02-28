@@ -1,6 +1,9 @@
 from datetime import datetime
 import os
+import shutil
 import zipfile
+
+from render import print_progress_bar
 
 
 def find_AM_PM(path):
@@ -43,7 +46,7 @@ def extract_date(path):
     new_date_string = f"{month} {day} {year} {hour} {minute} {AmPm}"
 
     # comma omitted as we don't re add it after it's os.removed
-    dt = datetime.datetime.strptime(new_date_string, "%b %d %Y %I %M %p")
+    dt = datetime.strptime(new_date_string, "%b %d %Y %I %M %p")
     return dt
 
 
@@ -66,14 +69,15 @@ def get_most_recent_path(student_paths):
 
 def extract_student_zips():
     all_subpaths = os.listdir('.')
-    for subpath in all_subpaths:
-        print(subpath)
+    print_progress_bar(0, len(all_subpaths), prefix='Progress:', suffix='Complete')
+    for i, subpath in enumerate(all_subpaths):
+        print_progress_bar(i + 1, len(all_subpaths), prefix='Progress:', suffix='Complete')
+
         if not subpath[0].isnumeric():
             continue
 
         person_name = subpath.split('-')[2].strip()
         person_name = person_name.split(' ')[1] + ', ' + person_name.split(' ')[0]
-        print(person_name)
 
         if not os.path.exists(person_name):
             os.makedirs(person_name)
@@ -103,7 +107,7 @@ def recursively_extract_zips():
         # mac leaves this random folder full of propritary  files
         if spath == '__MACOSX':
             continue
-        print(spath)
+
         if spath[-4:] == ".zip" and not os.path.isdir(spath):
             with zipfile.ZipFile(spath, 'r') as zip_ref:
                 zip_ref.extractall(f"{spath[:-4]}")
@@ -128,6 +132,7 @@ def remove_old_submissions():
             continue
 
         folders = os.listdir(spath)
+        folders = [f for f in folders if os.path.isdir(f"{spath}/{f}")]
 
         with open(f"{spath}/.latest", 'w') as f:
             f.write('')
@@ -135,7 +140,7 @@ def remove_old_submissions():
         most_recent_folder = get_most_recent_path(folders)
         for folder in folders:
             if folder != most_recent_folder:
-                os.shutil.rmtree(f"{spath}/{folder}")
+                shutil.rmtree(f"{spath}/{folder}")
 
 
 def find_file_path(file_name, cwd=os.getcwd()):
@@ -147,6 +152,19 @@ def find_file_path(file_name, cwd=os.getcwd()):
         for f in files:
             if f.split('-')[-1].strip() == file_name:
                 return os.path.join(root, f)
+
+
+def find_files_by_extension(file_extension: str, cwd=os.getcwd()) -> list[str]:
+    if file_extension[0] == '.':
+        file_extension = file_extension[1:]
+    all_paths = []
+    for root, dirs, files in os.walk(cwd):
+        if '__MACOSX' in root:
+            continue
+        for f in files:
+            if f.split('.')[-1] == file_extension:
+                all_paths.append(os.path.join(root, f))
+    return all_paths
 
 
 def get_zips_in_dir():

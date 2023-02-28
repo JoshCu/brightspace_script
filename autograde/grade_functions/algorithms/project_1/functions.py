@@ -4,7 +4,7 @@ import shutil
 import subprocess
 
 from datamodels import part1, part2
-from autograde.datamodels import test_result
+from autograde.common_datamodels import test_result
 from autograde.file_formatter import find_file_path
 from autograde.workers import run_test
 

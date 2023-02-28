@@ -3,7 +3,7 @@ import pathlib
 
 from dataclasses import dataclass
 
-from ....datamodels import test_result
+from ....common_datamodels import test_result
 
 
 @dataclass

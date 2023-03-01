@@ -71,6 +71,7 @@ async def bin_execution_test(student: str) -> run_result:
     student_results = run_result(student)
     student_path = os.path.join(os.getcwd(), student)
     bin_path = os.path.join(student_path, 'bin')
+    student_results.input_bytes = INPUT_BYTES
 
     # if no files in the bin folder, return
     if not os.listdir(bin_path):

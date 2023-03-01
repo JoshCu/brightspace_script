@@ -2,14 +2,14 @@ import traceback
 import asyncio
 import os
 import psutil
-
+import subprocess
 from typing import Callable
 
 from common_datamodels import test_result, exit_code
 from render import print_progress_bar
 
 # timeout in seconds for each test
-TIMEOUT = 5*60
+TIMEOUT = 10
 
 GLOBAL_CLEANUP = []
 
@@ -38,8 +38,13 @@ async def async_run_command(command: list[str], cli_input: bytes = None, cwd: st
     # run a command and print the output
     # record the error and return that if there is an error
     try:
-        output = await asyncio.create_subprocess_exec(*command, input=cli_input, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
-        stdout, stderr = await asyncio.wait_for(output.communicate(), timeout=TIMEOUT)
+        if cli_input is None:
+            output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
+            stdout, stderr = await asyncio.wait_for(output.communicate(), timeout=TIMEOUT)
+        else:
+            output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, stdin=asyncio.subprocess.PIPE, cwd=cwd)
+            stdout, stderr = await asyncio.wait_for(output.communicate(input=cli_input), timeout=TIMEOUT)
+
         # if return code is None, then the process was killed, return error
         if output.returncode is None:
             return f"Process was killed", exit_code.ERROR.value
@@ -49,7 +54,7 @@ async def async_run_command(command: list[str], cli_input: bytes = None, cwd: st
             return stderr.decode(
                 'utf-8', errors='ignore') + '\nERROR\n' + stdout.decode(
                 'utf-8', errors='ignore'), output.returncode
-    except asyncio.CalledProcessError as e:
+    except subprocess.CalledProcessError as e:
         # get the error message
         return f"Exception err={e.stderr.decode('utf-8',errors='ignore')}\n out={e.stdout.decode('utf-8',errors='ignore')}", e.returncode
     except asyncio.TimeoutError:

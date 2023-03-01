@@ -4,7 +4,7 @@ import shutil
 from datetime import datetime
 
 from render import to_html
-from file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_old_submissions
+from file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_all_old_submissions
 from workers import grade_all_students
 from common_datamodels import argument
 from common_tests import build_test, run_test
@@ -64,7 +64,9 @@ def assignment_zips(force=False):
     if choice == int(0):
         for zip in zips[1:]:
             if force:
-                shutil.rmtree(get_assignment_name(zip))
+                folder_name = get_assignment_name(zip)
+                if os.path.isdir(folder_name):
+                    shutil.rmtree(get_assignment_name(zip))
             unzip_assignment(zip)
     else:
         if force:
@@ -112,7 +114,7 @@ def menu():
         assignment_zips(force)
 
     if pick_directory():
-        remove_old_submissions()
+        remove_all_old_submissions()
         now = datetime.now()
         results = grade_all_students(build_test)
         print(f"Time to grade: {(datetime.now() - now).total_seconds():.2f}s")

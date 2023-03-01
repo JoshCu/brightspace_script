@@ -16,6 +16,18 @@
                 "-f",
                 "-unzip"
             ]
+        },
+        {
+            "name": "Python: Autograde Prod",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/autograde/menu.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-f",
+                "-unzip"
+            ]
         }
     ]
 }

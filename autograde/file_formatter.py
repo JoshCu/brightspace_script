@@ -2,20 +2,23 @@ from datetime import datetime
 import os
 import shutil
 import zipfile
+import re
 
 from render import print_progress_bar
 
 
-def find_AM_PM(path):
-    # find the AM or PM in the path
-    # if it is not found then return None
-    # otherwise return the index of the AM or PM
-    if "AM" in path:
-        return path.index("AM")
-    elif "PM" in path:
-        return path.index("PM")
-    else:
-        raise ValueError(f"AM or PM not found in path {path}")
+def get_date_list_from_path(path: str) -> str:
+    # regex to find multiple occurences of AM or PM
+    # checking for 1 numeric digit followed by a space and then AM or PM
+    pattern = r"\d\s(AM|PM)"
+    if len(re.findall(pattern, path)) > 1:
+        raise Exception("More than one AM or PM in path")
+
+    path_components = path.split(os.sep)
+    for i, component in enumerate(path_components):
+        for j, word in enumerate(component.split(' ')):
+            if word == 'AM' or word == 'PM':
+                return path_components[i].split(' ')[j-4:j+1]
 
 
 def extract_date(path):
@@ -25,9 +28,8 @@ def extract_date(path):
 
     # variation in names and formats means we have to do this manually
     # find AM or PM and then work backwards
-    start_location = find_AM_PM(path.split(' ')) - 4
 
-    date_list = path.split(' ')[start_location:start_location+5]
+    date_list = get_date_list_from_path(path)
     # formatted as Jan 1, 2023 1114 AM
 
     # manually day and pad the hour but not minutes
@@ -36,7 +38,7 @@ def extract_date(path):
     year = date_list[2]
     day = date_list[1][:-1]
     hour = date_list[3][:-2]
-    minute = date_list[3][-len(hour):]
+    minute = date_list[3][len(hour):]
     AmPm = date_list[4]
 
     day = day.zfill(2)
@@ -44,7 +46,6 @@ def extract_date(path):
     minute = minute.zfill(2)
     # re add the day and hour
     new_date_string = f"{month} {day} {year} {hour} {minute} {AmPm}"
-
     # comma omitted as we don't re add it after it's os.removed
     dt = datetime.strptime(new_date_string, "%b %d %Y %I %M %p")
     return dt
@@ -119,28 +120,50 @@ def recursively_extract_zips():
                 os.chdir('..')
 
 
-def remove_old_submissions():
+def remove_all_old_submissions():
     all_subpaths = os.listdir('.')
-
+    student_paths = [spath for spath in all_subpaths if os.path.isdir(spath) and ',' in spath]
     for spath in all_subpaths:
+        remove_old_submissions(spath)
 
-        # prevents reruns deleting files
-        if os.path.isfile(f"{spath}/.latest"):
-            continue
 
-        if ',' not in spath:
-            continue
+def remove_old_submissions(student_name: str):
+    # prevents reruns deleting files
+    if os.path.isfile(f"{student_name}/.latest"):
+        return
 
-        folders = os.listdir(spath)
-        folders = [f for f in folders if os.path.isdir(f"{spath}/{f}")]
+    # use os.walk to get every single unique path
+    paths = []
+    for root, dirs, files in os.walk(student_name):
+        for name in files:
+            paths.append(os.path.join(root, name))
 
-        with open(f"{spath}/.latest", 'w') as f:
-            f.write('')
+    # get all the unique file names
+    files = list(set([os.path.basename(p) for p in paths]))
 
-        most_recent_folder = get_most_recent_path(folders)
-        for folder in folders:
-            if folder != most_recent_folder:
-                shutil.rmtree(f"{spath}/{folder}")
+    newest_paths = []
+    # remove all but the most recent submission of each file version
+    for file in files:
+        newest = None
+        newest_date = None
+        for path in paths:
+            if not file in path:
+                continue
+            date = extract_date(path)
+            if newest_date is None or date > newest_date:
+                newest = path
+                newest_date = date
+        newest_paths.append(newest)
+
+    # remove all the old submissions
+    for path in paths:
+        if path not in newest_paths:
+            os.remove(path)
+
+    # clean up empty folders
+    for root, dirs, files in os.walk(student_name):
+        if len(files) == 0 and len(dirs) == 0:
+            os.rmdir(root)
 
 
 def find_file_path(file_name, cwd=os.getcwd()):
@@ -177,11 +200,13 @@ def get_zips_in_dir():
 
 
 def get_assignment_name(zip_path: str) -> str:
-    if zip_path[0] == 'A' or zip_path[0] == 'P':
-        assignment_name = zip_path.split(' ')[0]
+    words = zip_path.split(' ')
+    if zip_path[0] == 'A':
+        assignment_name = words[0]
+    elif zip_path[0] == 'P':
+        assignment_name = f"{words[0]} {words[1]}"
     else:
-        words = zip_path.split(' ')
-        assignment_name = "{} {}".format(words[1], words[2])
+        assignment_name = f"{words[1]} {words[2]}"
     return assignment_name
 
 

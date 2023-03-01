@@ -34,13 +34,13 @@ async def grade_part_1(student: str) -> part1:
     # make all
 
     # run make all and check for errors
-    if await run_test(student_results.rsa_file_compiles, ['make', 'all'], part1_path) != 0:
+    if await run_test(test_case=student_results.rsa_file_compiles, command=['make', 'all'], cwd=part1_path) != 0:
         return student_results
 
     # run .\rsa435.exe
 
     binary_path = os.path.join(part1_path, 'rsa435')
-    if await run_test(student_results.rsa_file_runs, [binary_path], part1_path) != 0:
+    if await run_test(test_case=student_results.rsa_file_runs, command=[binary_path], cwd=part1_path) != 0:
         return student_results
 
     # check for e_n.txt, d_n.txt p_q.txt
@@ -54,12 +54,12 @@ async def grade_part_1(student: str) -> part1:
         student_results.keys_file_found.exit_code = 0
 
     # make gradeing
-    if await run_test(student_results.grading_builds, ['make', 'grading'], part1_path) != 0:
+    if await run_test(test_case=student_results.grading_builds, command=['make', 'grading'], cwd=part1_path) != 0:
         return student_results
 
     # run .\RSAPartIGrading -- get output
     binary_path = os.path.join(part1_path, 'RSAPartIGrading')
-    if await run_test(student_results.grading_runs, [binary_path], part1_path) != 0:
+    if await run_test(test_case=student_results.grading_runs, command=[binary_path], cwd=part1_path) != 0:
         return student_results
     else:
         student_results.grading_runs.result = f"{student_results.grading_runs.result.count('pass')}:6\n{student_results.grading_runs.result}"
@@ -93,10 +93,10 @@ async def grade_part_2(student: str) -> part2:
     shutil.copy(message_path, part2_path)
 
     # run make all and check for errors
-    if await run_test(student_results.message_file_compiles, ['make', 'digest'], part2_path) != 0:
+    if await run_test(test_case=student_results.message_file_compiles, command=['make', 'digest'], cwd=part2_path) != 0:
         return student_results
 
-    if await run_test(test_result(), ['make', 'grading'], part2_path) != 0:
+    if await run_test(test_case=test_result(), command=['make', 'grading'], cwd=part2_path) != 0:
         return student_results
 
     test_files = ['one_line.txt', 'two_lines.txt', 'bible_part1.txt']

@@ -34,11 +34,11 @@ def kill_running_processes(to_kill: list[str]):
         print(f"{traceback.format_exc()}")
 
 
-async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple[str, int]:
+async def async_run_command(command: list[str], cli_input: bytes = None, cwd: str = os.getcwd()) -> tuple[str, int]:
     # run a command and print the output
     # record the error and return that if there is an error
     try:
-        output = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
+        output = await asyncio.create_subprocess_exec(*command, input=cli_input, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd)
         stdout, stderr = await asyncio.wait_for(output.communicate(), timeout=TIMEOUT)
         # if return code is None, then the process was killed, return error
         if output.returncode is None:
@@ -57,8 +57,8 @@ async def async_run_command(command: list[str], cwd: str = os.getcwd()) -> tuple
         return f"Timeout after {TIMEOUT} seconds", exit_code.ERROR.value
 
 
-async def run_test(test_case: test_result, command: list[str], cwd: str = os.getcwd()) -> int:
-    test_case.result, test_case.exit_code = await async_run_command(command, cwd)
+async def run_test(test_case: test_result, command: list[str], cli_input: bytes = None, cwd: str = os.getcwd()) -> int:
+    test_case.result, test_case.exit_code = await async_run_command(command=command, cli_input=cli_input, cwd=cwd)
     return test_case.exit_code
 
 

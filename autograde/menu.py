@@ -80,7 +80,7 @@ def pick_directory() -> bool:
     dirs = [dir for dir in dirs if dir != 'zips']
     dirs = ['Exit', *dirs]
 
-    print("Pick a directory to grade")
+    print("Pick a directory to build")
     print("")
     choice = get_choice(dirs)
     if choice == 0:
@@ -98,9 +98,9 @@ def menu():
     start_dir = os.getcwd()
     force = False
 
-    if len(sys.argv) == 1:
-        print_args()
-        exit(1)
+    # if len(sys.argv) == 1:
+    #     print_args()
+    #     exit(1)
 
     if '-force' in sys.argv or '-f' in sys.argv:
         force = True

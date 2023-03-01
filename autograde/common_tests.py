@@ -8,6 +8,8 @@ COMPILER = 'g++'
 BUILD_ARGS = ['-std=c++11', '-Wall', '-Wextra', '-Werror', '-pedantic', ]
 OUTPUT_ARGS = ['-o', '../bin/out']
 
+INPUT_BYTES = b''
+
 
 async def build_test(student: str) -> build_result:
     # build the student's code
@@ -52,8 +54,32 @@ async def build_test(student: str) -> build_result:
     compile_command = [COMPILER, *OUTPUT_ARGS, *src_files]
     #compile_command = [COMPILER, *BUILD_ARGS, *OUTPUT_ARGS, *src_files]
 
-    # run make all
-    if await run_test(student_results.build, compile_command, src_path) != 0:
+    # run build
+    if await run_test(test_case=student_results.build, command=compile_command, cwd=src_path) != 0:
+        # if build fails, remove any files in the bin folder
+        # the build can fail and it leave an object called 'out'
+        # this causes errors in the execution test
+        for file in os.listdir(bin_path):
+            os.remove(os.path.join(bin_path, file))
+
+    return student_results
+
+
+async def bin_execution_test(student: str) -> run_result:
+    # run the student's code
+    # sort out the paths
+    student_results = run_result(student)
+    student_path = os.path.join(os.getcwd(), student)
+    bin_path = os.path.join(student_path, 'bin')
+
+    # if no files in the bin folder, return
+    if not os.listdir(bin_path):
+        student_results.output.exit_code = -1
+        return student_results
+
+    # run the executable
+    run_command = [os.path.join(bin_path, 'out')]
+    if await run_test(test_case=student_results.output, command=run_command, cwd=bin_path, cli_input=INPUT_BYTES) != 0:
         return student_results
 
     return student_results

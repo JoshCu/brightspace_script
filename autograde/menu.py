@@ -7,7 +7,7 @@ from render import to_html
 from file_formatter import get_zips_in_dir, get_assignment_name, unzip_assignment, remove_all_old_submissions
 from workers import grade_all_students
 from common_datamodels import argument
-from common_tests import build_test, run_test
+from common_tests import build_test, bin_execution_test
 
 
 def get_choice(options: list) -> int:
@@ -119,9 +119,16 @@ def menu():
         results = grade_all_students(build_test)
         print(f"Time to grade: {(datetime.now() - now).total_seconds():.2f}s")
         to_html(results, 'build.html')
+
+        run = input(f"Run executables? [y/N]\n") == 'y'
+        if run:
+            run_results = grade_all_students(bin_execution_test)
+            to_html(run_results, 'run.html')
+
         os.chdir(start_dir)
         if '-unzip' in sys.argv:
             sys.argv.remove('-unzip')
+
         menu()
 
     # if '-p1' in sys.argv:

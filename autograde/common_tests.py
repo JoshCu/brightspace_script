@@ -6,9 +6,7 @@ import shutil
 
 COMPILER = 'g++'
 BUILD_ARGS = ['-std=c++11', '-Wall', '-Wextra', '-Werror', '-pedantic', ]
-OUTPUT_ARGS = ['-o', '../bin/out', '*.cpp']
-#BUILD_COMMAND = [COMPILER, *BUILD_ARGS, *OUTPUT_ARGS]
-BUILD_COMMAND = [COMPILER, *OUTPUT_ARGS]
+OUTPUT_ARGS = ['-o', '../bin/out']
 
 
 async def build_test(student: str) -> build_result:
@@ -23,9 +21,16 @@ async def build_test(student: str) -> build_result:
     if not os.path.exists(bin_path):
         os.mkdir(bin_path)
 
+    # remove any old files in the src and bin folders
+    for file in os.listdir(src_path):
+        os.remove(os.path.join(src_path, file))
+    for file in os.listdir(bin_path):
+        os.remove(os.path.join(bin_path, file))
+
     # find the source files
     src_files = find_files_by_extension('.cpp', student_path)
     src_files.extend(find_files_by_extension('.hpp', student_path))
+    src_files.extend(find_files_by_extension('.h', student_path))
 
     # if no source files, return error
     if not src_files:
@@ -35,22 +40,20 @@ async def build_test(student: str) -> build_result:
         student_results.src_files_found.exit_code = 0
 
     # copy source files to src folder
-    for file in src_files:
-        shutil.copy(file, src_path)
+    for file_path in src_files:
+        file_name = os.path.basename(file_path)
+        dest_file_path = os.path.join(src_path, file_name)
+        if not os.path.exists(dest_file_path):
+            shutil.copy2(file_path, src_path)
+
+    # run compiler and specify exact files per student
+    # without this, the compiler will use all .cpp files in the directory
+    # all the students files get put in the same temp directory during g++ compiliation
+    compile_command = [COMPILER, *OUTPUT_ARGS, *src_files]
+    #compile_command = [COMPILER, *BUILD_ARGS, *OUTPUT_ARGS, *src_files]
 
     # run make all
-    if await run_test(student_results.build, BUILD_COMMAND, src_path) != 0:
+    if await run_test(student_results.build, compile_command, src_path) != 0:
         return student_results
 
     return student_results
-
-
-# async def run_test(student: str) -> run_result:
-#     try:
-#         test.result = await run_command(args, path)
-#         test.exit_code = 0
-#         return 0
-#     except Exception as e:
-#         test.result = str(e)
-#         test.exit_code = 1
-#         return 1

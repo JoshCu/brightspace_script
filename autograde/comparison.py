@@ -3,11 +3,12 @@ import re
 import os
 import os.path as p
 
-from sorter import find_file_path, print_progress_bar
+from render import print_progress_bar
+from file_formatter import find_file_path, find_files_by_extension
 
 # The threshold for how similar two files need to be to be considered similar.
 # 1 means they are the same, 0 means they are completely different.
-SIMILARITY_THRESHOLD = 0.8
+SIMILARITY_THRESHOLD = 0.88
 
 
 def strip_all_whitespace(lines):
@@ -58,9 +59,9 @@ def diff_ratio(diff):
 def get_all_paths(file_name: str, dirs) -> list:
     paths = []
     for dir in dirs:
-        file_path = find_file_path(file_name, dir)
-        if file_path is not None:
-            paths.append(file_path)
+        file_path = find_files_by_extension(file_name, dir)
+        if len(file_path) > 0:
+            paths.append(file_path[0])
     return paths
 
 
@@ -104,7 +105,7 @@ def compare_all_files(files: dict) -> list[tuple[str, str, float]]:
 
 
 if __name__ == '__main__':
-
+    os.chdir('put_zips_here')
     dirs = os.listdir('.')
     dirs = [dir for dir in dirs if p.isdir(dir)]
     print("Pick a directory to compare")
@@ -113,7 +114,8 @@ if __name__ == '__main__':
     choice = input("Enter a number: ")
     os.chdir(dirs[int(choice)])
 
-    file_names = ['messageDigest435.cpp', 'rsa435.cc']
+    file_names = ['.cpp', '.h', '.hpp']
+    ignore_files = ['rational']
 
     print("Comparing files: ", file_names)
 
@@ -128,6 +130,8 @@ if __name__ == '__main__':
         paths = get_all_paths(file_n, dirs)
         files_and_contents = {}
         for path in paths:
+            if any([name in os.path.basename(path).lower() for name in ignore_files]):
+                continue
             files_and_contents[path] = get_contents_of_file(path)
         print(f"Found {len(files_and_contents)} files for {file_n}")
         print("Comparing files...")

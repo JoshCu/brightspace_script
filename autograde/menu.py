@@ -74,13 +74,13 @@ def assignment_zips(force=False):
         unzip_assignment(zips[int(choice)])
 
 
-def pick_directory() -> bool:
+def pick_directory(action: str = 'to build') -> bool:
     dirs = os.listdir('.')
     dirs = [dir for dir in dirs if os.path.isdir(dir)]
     dirs = [dir for dir in dirs if dir != 'zips']
     dirs = ['Exit', *dirs]
 
-    print("Pick a directory to build")
+    print(f"Pick a directory {action}")
     print("")
     choice = get_choice(dirs)
     if choice == 0:

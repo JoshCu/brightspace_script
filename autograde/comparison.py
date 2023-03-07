@@ -2,6 +2,7 @@ import difflib
 import re
 import os
 import os.path as p
+import shutil
 
 from render import print_progress_bar
 from file_formatter import find_file_path, find_files_by_extension
@@ -14,7 +15,9 @@ SIMILARITY_THRESHOLD = 0.88
 def strip_all_whitespace(lines):
     stripped_lines = []
     for line in lines:
-        stripped_lines.append(re.sub(r"[\n\t\s]+", "", line) + '\n')
+        striped_line = re.sub(r"[\n\t\s]+", "", line)
+        if len(striped_line) > 0:
+            stripped_lines.append(striped_line + '\n')
     return stripped_lines
 
 
@@ -82,6 +85,7 @@ def compare_all_files(files: dict) -> list[tuple[str, str, float]]:
     similar_pairs = []
     counter = 0
     steps = calculate_complexity_steps(len(files))
+    total = len(files)
     for i, (name, content) in enumerate(files.items()):
         if i == len(files) - 1:
             break
@@ -98,10 +102,41 @@ def compare_all_files(files: dict) -> list[tuple[str, str, float]]:
             inverse_diff_list = list(''.join(inverse_diff).splitlines())
 
             max_ratio = max(diff_ratio(diff_list), diff_ratio(inverse_diff_list))
+            total += max_ratio
             if max_ratio > SIMILARITY_THRESHOLD:
                 similar_pairs.append((name, name2, max_ratio*100))
+    if steps > 0:
+        print(f"Average similarity: {(total/(steps/2))*100}")
 
     return similar_pairs
+
+
+def render_results(similar_pairs):
+    for pair in similar_pairs:
+        student1 = pair[0].split(os.path.sep)[0]
+        student2 = pair[1].split(os.path.sep)[0]
+        file1 = os.path.basename(pair[0])
+        file2 = os.path.basename(pair[1])
+        print(f"Similarity: {pair[2]:.2f}% Student 1: {student1} Student 2: {student2}")
+        print(f"File 1: {file1} File 2: {file2}")
+
+
+def copy_files(similar_pairs, file_n):
+    if not os.path.exists('zz_similar'):
+        os.mkdir('zz_similar')
+    else:
+        shutil.rmtree('zz_similar')
+        os.mkdir('zz_similar')
+    for i, pair in enumerate(similar_pairs):
+        student1 = pair[0].split(os.path.sep)[0]
+        student2 = pair[1].split(os.path.sep)[0]
+        file1 = os.path.basename(pair[0])
+        file2 = os.path.basename(pair[1])
+        if not os.path.exists(f'zz_similar/pair{i}/'):
+            os.mkdir(f'zz_similar/pair{i}/')
+
+        shutil.copy(pair[0], f'zz_similar/pair{i}/{student1}-{file1}')
+        shutil.copy(pair[1], f'zz_similar/pair{i}/{student2}-{file2}')
 
 
 if __name__ == '__main__':
@@ -134,8 +169,9 @@ if __name__ == '__main__':
                 continue
             files_and_contents[path] = get_contents_of_file(path)
         print(f"Found {len(files_and_contents)} files for {file_n}")
-        print("Comparing files...")
-        similar_pairs = compare_all_files(files_and_contents)
-        print(f"Found {len(similar_pairs)} similar pairs for {file_n}")
-        for pair in similar_pairs:
-            print(pair)
+        if len(files_and_contents) > 0:
+            print("Comparing files...")
+            similar_pairs = compare_all_files(files_and_contents)
+            print(f"Found {len(similar_pairs)} similar pairs for {file_n}")
+            render_results(similar_pairs)
+            copy_files(similar_pairs, file_n)

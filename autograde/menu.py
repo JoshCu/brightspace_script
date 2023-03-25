@@ -70,7 +70,8 @@ def assignment_zips(force=False):
             unzip_assignment(zip)
     else:
         if force:
-            shutil.rmtree(get_assignment_name(zips[int(choice)]))
+            if os.path.isdir(get_assignment_name(zips[int(choice)])):
+                shutil.rmtree(get_assignment_name(zips[int(choice)]))
         unzip_assignment(zips[int(choice)])
 
 

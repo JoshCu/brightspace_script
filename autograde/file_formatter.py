@@ -128,6 +128,10 @@ def remove_all_old_submissions():
 
 
 def remove_old_submissions(student_name: str):
+    if not os.path.isdir(student_name):
+        return
+    with open(f"{student_name}/.latest", 'w') as f:
+        f.write('')
     # prevents reruns deleting files
     if os.path.isfile(f"{student_name}/.latest"):
         return
@@ -164,6 +168,11 @@ def remove_old_submissions(student_name: str):
     for root, dirs, files in os.walk(student_name):
         if len(files) == 0 and len(dirs) == 0:
             os.rmdir(root)
+
+    with open(f"{student_name}/.latest", 'w') as f:
+        f.write('')
+
+    return
 
 
 def find_file_path(file_name, cwd=os.getcwd()):

@@ -106,7 +106,7 @@ def compare_all_files(files: dict) -> list[tuple[str, str, float]]:
             if max_ratio > SIMILARITY_THRESHOLD:
                 similar_pairs.append((name, name2, max_ratio*100))
     if steps > 0:
-        print(f"Average similarity: {(total/(steps/2))*100}")
+        print(f"Average similarity: {(total/(counter/2))*100}")
 
     return similar_pairs
 
@@ -148,6 +148,8 @@ if __name__ == '__main__':
         print(f"{i}: {dir}")
     choice = input("Enter a number: ")
     os.chdir(dirs[int(choice)])
+
+    SIMILARITY_THRESHOLD = int(input(f"Enter a similarity threshold 0-100 (default:{SIMILARITY_THRESHOLD}): "))
 
     file_names = ['.cpp', '.h', '.hpp']
     ignore_files = ['rational']

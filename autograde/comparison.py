@@ -148,10 +148,11 @@ if __name__ == '__main__':
         print(f"{i}: {dir}")
     choice = input("Enter a number: ")
     os.chdir(dirs[int(choice)])
+    user_input = input(f"Enter a similarity threshold 0-100 (default:{SIMILARITY_THRESHOLD}): ")
+    if len(user_input) > 0:
+        SIMILARITY_THRESHOLD = float(user_input)/100
 
-    SIMILARITY_THRESHOLD = int(input(f"Enter a similarity threshold 0-100 (default:{SIMILARITY_THRESHOLD}): "))
-
-    file_names = ['.cpp', '.h', '.hpp']
+    file_names = ['.cpp']
     ignore_files = ['rational']
 
     print("Comparing files: ", file_names)

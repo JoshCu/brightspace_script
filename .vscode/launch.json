@@ -24,10 +24,7 @@
             "program": "${workspaceFolder}/autograde/menu.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": [
-                "-f",
-                "-unzip"
-            ]
+            "args": []
         }
     ]
 }
